@@ -1,0 +1,13 @@
+packages:
+  - apps/*
+  - packages/*
+
+allowBuilds:
+  esbuild: true
+  msgpackr-extract: true
+
+onlyBuiltDependencies:
+  - argon2
+  - esbuild
+  - msgpackr-extract
+  - sharp

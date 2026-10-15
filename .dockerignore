@@ -1,0 +1,12 @@
+.git
+.github
+.next
+.tmp
+AGENTS.md
+coverage
+dist
+docs
+node_modules
+README.md
+*.log
+*.tsbuildinfo

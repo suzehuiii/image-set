@@ -1,0 +1,192 @@
+name: image-set
+
+x-app-environment: &app-environment
+  NODE_ENV: production
+  DATABASE_URL: ${DATABASE_URL:-postgresql://image_set:image-set-local-only@postgres:5432/image_set}
+  REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+  S3_ENDPOINT: ${S3_ENDPOINT:-http://minio:9000}
+  S3_REGION: ${S3_REGION:-us-east-1}
+  S3_ACCESS_KEY: ${S3_ACCESS_KEY:-image_set}
+  S3_SECRET_KEY: ${S3_SECRET_KEY:-image-set-local-only}
+  S3_BUCKET: ${S3_BUCKET:-image-set-local}
+  S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  OPENAI_ANALYSIS_MODEL: ${OPENAI_ANALYSIS_MODEL:-gpt-6.1-sol}
+  OPENAI_IMAGE_MODEL: ${OPENAI_IMAGE_MODEL:-gpt-image-2.5-sunburst}
+  OPENAI_REVIEW_MODEL: ${OPENAI_REVIEW_MODEL:-gpt-6-luna}
+
+x-app-dependencies: &app-dependencies
+  postgres:
+    condition: service_healthy
+  redis:
+    condition: service_healthy
+  minio:
+    condition: service_healthy
+
+services:
+  web:
+    image: image-set-app:local
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile
+      args:
+        APP_NAME: '@image-set/web'
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
+    command: ['pnpm', '--filter', '@image-set/web', 'start']
+    environment:
+      <<: *app-environment
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost/api}
+    ports:
+      - '${WEB_PORT:-3000}:3000'
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://localhost:3000/api/health').then(r=>{if(!r.ok)process.exit(1)})",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  api:
+    image: image-set-app:local
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile
+      args:
+        APP_NAME: '@image-set/web'
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
+    command: ['pnpm', '--filter', '@image-set/api', 'start']
+    environment:
+      <<: *app-environment
+      API_PORT: 3001
+    ports:
+      - '${API_PORT:-3001}:3001'
+    depends_on: *app-dependencies
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://localhost:3001/api/health').then(r=>{if(!r.ok)process.exit(1)})",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    restart: unless-stopped
+
+  worker:
+    image: image-set-app:local
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile
+      args:
+        APP_NAME: '@image-set/web'
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmmirror.com}
+    command: ['pnpm', '--filter', '@image-set/worker', 'start']
+    environment:
+      <<: *app-environment
+      WORKER_HEALTH_PORT: 3002
+    ports:
+      - '${WORKER_HEALTH_PORT:-3002}:3002'
+    depends_on: *app-dependencies
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://localhost:3002/health').then(r=>{if(!r.ok)process.exit(1)})",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-image_set}
+      POSTGRES_USER: ${POSTGRES_USER:-image_set}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-image-set-local-only}
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  redis:
+    image: redis:8-alpine
+    command: ['redis-server', '--appendonly', 'yes']
+    ports:
+      - '${REDIS_PORT:-6379}:6379'
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  minio:
+    image: bitnamilegacy/minio:2025.7.23-debian-12-r5
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-image_set}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-image-set-local-only}
+      MINIO_DEFAULT_BUCKETS: ${S3_BUCKET:-image-set-local}
+    ports:
+      - '${MINIO_PORT:-9000}:9000'
+      - '${MINIO_CONSOLE_PORT:-9001}:9001'
+    volumes:
+      - minio-data:/bitnami/minio/data
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'curl --fail --silent http://localhost:9000/minio/health/live >/dev/null',
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:1.29-alpine
+    ports:
+      - '${NGINX_PORT:-8080}:80'
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      web:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        ['CMD', 'wget', '--quiet', '--tries=1', '--spider', 'http://localhost/']
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:

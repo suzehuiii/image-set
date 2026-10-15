@@ -1,0 +1,37 @@
+{
+  "name": "image-set",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI-powered ecommerce product image suite",
+  "packageManager": "pnpm@11.25.0",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=11.0.0"
+  },
+  "scripts": {
+    "build": "pnpm packages:build && pnpm --filter \"./apps/**\" build",
+    "clean": "pnpm -r run clean",
+    "dev": "pnpm packages:build && pnpm --parallel --filter \"./apps/**\" dev",
+    "dev:infra": "docker compose up -d postgres redis minio",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "healthcheck": "node scripts/healthcheck.mjs",
+    "lint": "eslint . --max-warnings=0",
+    "packages:build": "pnpm --filter \"./packages/**\" build",
+    "test": "cross-env TEMP=.tmp TMP=.tmp vitest run",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^22.19.0",
+    "cross-env": "^10.1.0",
+    "eslint": "^10.12.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.13.0",
+    "prettier": "^3.6.2",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.3",
+    "vitest": "^4.0.7"
+  }
+}
