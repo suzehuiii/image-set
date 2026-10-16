@@ -50,6 +50,9 @@ importers:
       '@image-set/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@image-set/image-layout':
+        specifier: workspace:*
+        version: link:../../packages/image-layout
       '@image-set/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -74,6 +77,9 @@ importers:
       class-validator:
         specifier: ^0.14.2
         version: 0.14.4
+      fflate:
+        specifier: ^0.8.2
+        version: 0.8.3
       file-type:
         specifier: ^22.2.0
         version: 22.2.0(supports-color@7.2.0)
@@ -197,6 +203,9 @@ importers:
       '@image-set/shared':
         specifier: workspace:*
         version: link:../shared
+      sharp:
+        specifier: ^0.35.5
+        version: 0.35.5(@types/node@22.20.5)
 
   packages/shared:
     dependencies:
@@ -1430,6 +1439,9 @@ packages:
     peerDependenciesMeta:
       picomatch:
         optional: true
+
+  fflate@0.8.3:
+    resolution: {integrity: sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA==}
 
   file-entry-cache@11.1.5:
     resolution: {integrity: sha512-+PFTHITI08JIGhnNpGNI8T8inUpgZfk3GNEqfT9R2zZV2iFXg3CvqzSl/uEhs7TSGujYRELEANyDvS8Fj7+S7Q==}
@@ -3355,6 +3367,8 @@ snapshots:
   fdir@6.5.0(picomatch@4.0.7):
     optionalDependencies:
       picomatch: 4.0.7
+
+  fflate@0.8.3: {}
 
   file-entry-cache@11.1.5:
     dependencies:

@@ -6,6 +6,7 @@ import { AssetsController, AssetsService } from './assets.js';
 import { AuthController, AuthGuard, AuthService } from './auth.js';
 import { CreditsController, CreditsService } from './credits.js';
 import { DatabaseService } from './database.service.js';
+import { ExportsController, ExportsService } from './exports.js';
 import { HealthController } from './health.controller.js';
 import { HealthService } from './health.service.js';
 import {
@@ -23,6 +24,7 @@ import { ProjectsController, ProjectsService } from './projects.js';
     AssetsController,
     AnalysisController,
     GenerationsController,
+    ExportsController,
     CreditsController,
   ],
   providers: [
@@ -36,6 +38,7 @@ import { ProjectsController, ProjectsService } from './projects.js';
     AnalysisService,
     GenerationQueueService,
     GenerationsService,
+    ExportsService,
     CreditsService,
   ],
 })

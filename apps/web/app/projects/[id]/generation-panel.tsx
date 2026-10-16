@@ -1,7 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { IMAGE_ROLES, type ImageRole } from '@image-set/shared';
+import {
+  IMAGE_ROLES,
+  type ImageRole,
+  type ProductAnalysisResult,
+} from '@image-set/shared';
 
 import { api, type Asset, type Job } from '../../lib/api';
 
@@ -26,18 +30,22 @@ const STAGE_LABELS: Record<string, string> = {
 export function GenerationPanel({
   projectId,
   creditBalance,
+  analysis,
   assets,
   jobs,
   onRefresh,
 }: {
   projectId: string;
   creditBalance: number;
+  analysis: ProductAnalysisResult;
   assets: Asset[];
   jobs: Job[];
   onRefresh: () => Promise<void>;
 }) {
   const [pending, setPending] = useState(false);
+  const [exporting, setExporting] = useState('');
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const imageJobs = useMemo(
     () => jobs.filter((job) => job.jobType === 'image'),
     [jobs],
@@ -45,6 +53,16 @@ export function GenerationPanel({
   const active = imageJobs.some(
     (job) => job.status === 'queued' || job.status === 'running',
   );
+  const generatedRoles = useMemo(
+    () =>
+      new Set(
+        assets
+          .filter((asset) => asset.assetType === 'generated' && asset.imageRole)
+          .map((asset) => asset.imageRole),
+      ),
+    [assets],
+  );
+  const completeSet = IMAGE_ROLES.every((role) => generatedRoles.has(role));
 
   useEffect(() => {
     if (!active) return;
@@ -57,6 +75,7 @@ export function GenerationPanel({
   async function create(role?: ImageRole) {
     setPending(true);
     setError('');
+    setNotice('');
     try {
       await api(`/projects/${projectId}/generations`, {
         method: 'POST',
@@ -74,6 +93,7 @@ export function GenerationPanel({
   async function retry(jobId: string) {
     setPending(true);
     setError('');
+    setNotice('');
     try {
       await api(`/jobs/${jobId}/retry`, {
         method: 'POST',
@@ -84,6 +104,33 @@ export function GenerationPanel({
       setError(caught instanceof Error ? caught.message : '重试失败');
     } finally {
       setPending(false);
+    }
+  }
+
+  async function exportImages(format: 'png' | 'jpg', role?: ImageRole) {
+    const exportKey = `${role ?? 'set'}-${format}`;
+    setExporting(exportKey);
+    setError('');
+    setNotice('');
+    try {
+      const result = await api<{ asset: Asset; bundle: boolean }>(
+        `/projects/${projectId}/exports`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ format, ...(role ? { role } : {}) }),
+        },
+      );
+      setNotice(
+        role
+          ? `${ROLE_LABELS[role]}已按当前保存文案重新合成，未扣额度。`
+          : `${format.toUpperCase()} 整套 ZIP 已生成，未扣额度。`,
+      );
+      await onRefresh();
+      window.location.assign(`/api/assets/${result.asset.id}/download`);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : '导出失败');
+    } finally {
+      setExporting('');
     }
   }
 
@@ -104,9 +151,26 @@ export function GenerationPanel({
           >
             {active ? '套图生成中…' : '生成完整四图 · 12 额度'}
           </button>
+          <div className="zip-actions">
+            <button
+              className="ghost"
+              disabled={!completeSet || Boolean(exporting)}
+              onClick={() => exportImages('png')}
+            >
+              {exporting === 'set-png' ? '打包中…' : 'PNG 整套 ZIP'}
+            </button>
+            <button
+              className="ghost"
+              disabled={!completeSet || Boolean(exporting)}
+              onClick={() => exportImages('jpg')}
+            >
+              {exporting === 'set-jpg' ? '打包中…' : 'JPG 整套 ZIP'}
+            </button>
+          </div>
         </div>
       </div>
       {error && <p className="error banner">{error}</p>}
+      {notice && <p className="success banner">{notice}</p>}
       <div className="generation-grid">
         {IMAGE_ROLES.map((role) => {
           const roleJobs = imageJobs.filter((job) => job.imageRole === role);
@@ -122,6 +186,8 @@ export function GenerationPanel({
               (asset) =>
                 asset.assetType === 'generated' && asset.imageRole === role,
             );
+          const copy =
+            analysis.imagePlan.find((item) => item.role === role)?.copyEn ?? '';
           return (
             <article className="generation-card" key={role}>
               <div className="generation-preview">
@@ -181,6 +247,12 @@ export function GenerationPanel({
                     {latest.errorMessageSafe ?? '任务失败，额度已退回。'}
                   </p>
                 )}
+                {result && role !== 'main' && (
+                  <p className="export-copy">
+                    <strong>导出文案</strong>
+                    {copy || '未填写英文文案，将导出无文字视觉。'}
+                  </p>
+                )}
                 <div className="generation-card-actions">
                   {latest?.status === 'failed' ? (
                     <button
@@ -200,6 +272,28 @@ export function GenerationPanel({
                     </button>
                   )}
                 </div>
+                {result && (
+                  <div className="download-actions">
+                    <button
+                      className="ghost"
+                      disabled={Boolean(exporting)}
+                      onClick={() => exportImages('png', role)}
+                    >
+                      {exporting === `${role}-png`
+                        ? '合成中…'
+                        : '合成并下载 PNG'}
+                    </button>
+                    <button
+                      className="ghost"
+                      disabled={Boolean(exporting)}
+                      onClick={() => exportImages('jpg', role)}
+                    >
+                      {exporting === `${role}-jpg`
+                        ? '合成中…'
+                        : '合成并下载 JPG'}
+                    </button>
+                  </div>
+                )}
               </div>
             </article>
           );

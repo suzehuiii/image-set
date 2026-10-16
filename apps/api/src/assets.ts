@@ -38,8 +38,8 @@ function required(name: string): string {
   return value;
 }
 
-function storageClient(): MinioClient {
-  const endpoint = new URL(required('S3_ENDPOINT'));
+function storageClient(endpointValue = required('S3_ENDPOINT')): MinioClient {
+  const endpoint = new URL(endpointValue);
   return new MinioClient({
     endPoint: endpoint.hostname,
     port: Number(endpoint.port || (endpoint.protocol === 'https:' ? 443 : 80)),
@@ -68,6 +68,9 @@ type AssetRow = {
 @Injectable()
 export class AssetsService {
   private readonly storage = storageClient();
+  private readonly publicStorage = storageClient(
+    process.env.S3_PUBLIC_ENDPOINT ?? required('S3_ENDPOINT'),
+  );
   private readonly bucket = required('S3_BUCKET');
 
   constructor(
@@ -209,7 +212,38 @@ export class AssetsService {
     );
     const asset = result.rows[0];
     if (!asset) throw new NotFoundException('素材不存在');
-    return this.storage.presignedGetObject(this.bucket, asset.objectKey, 300);
+    return this.publicStorage.presignedGetObject(
+      this.bucket,
+      asset.objectKey,
+      300,
+    );
+  }
+
+  async downloadUrl(userId: string, assetId: string): Promise<string> {
+    const result = await this.database.client.pool.query<{
+      objectKey: string;
+      originalName: string;
+      mimeType: string;
+    }>(
+      `select a.object_key as "objectKey", a.original_name as "originalName",
+              a.mime_type as "mimeType"
+       from assets a join projects p on p.id = a.project_id and p.deleted_at is null
+       where a.id = $1 and a.owner_user_id = $2 and a.deleted_at is null
+         and a.status = 'ready' and a.asset_type in ('generated', 'export')`,
+      [assetId, userId],
+    );
+    const asset = result.rows[0];
+    if (!asset) throw new NotFoundException('可下载文件不存在');
+    const safeAscii = asset.originalName.replace(/[^a-zA-Z0-9._-]/g, '_');
+    return this.publicStorage.presignedGetObject(
+      this.bucket,
+      asset.objectKey,
+      300,
+      {
+        'response-content-type': asset.mimeType,
+        'response-content-disposition': `attachment; filename="${safeAscii}"; filename*=UTF-8''${encodeURIComponent(asset.originalName)}`,
+      },
+    );
   }
 
   async productAnalysisInputs(
@@ -301,5 +335,14 @@ export class AssetsController {
     @Res() response: Response,
   ) {
     response.redirect(await this.assets.contentUrl(user.id, id));
+  }
+
+  @Get('assets/:id/download')
+  async download(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Res() response: Response,
+  ) {
+    response.redirect(await this.assets.downloadUrl(user.id, id));
   }
 }

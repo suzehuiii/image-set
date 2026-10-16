@@ -609,6 +609,38 @@ textarea:focus {
 .generation-card-actions {
   margin-top: 16px;
 }
+.zip-actions,
+.download-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.zip-actions {
+  justify-content: flex-end;
+}
+.download-actions {
+  margin-top: 10px;
+}
+.download-actions .ghost {
+  flex: 1;
+}
+.export-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 14px 0 0;
+  padding: 12px;
+  border-radius: 12px;
+  color: #625752;
+  background: #f2eeeb;
+  font-size: 0.88rem;
+}
+.export-copy strong {
+  color: #332c29;
+  font-size: 0.76rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
 @media (max-width: 780px) {
   .workspace,
   .form-page {
@@ -647,6 +679,9 @@ textarea:focus {
   }
   .generation-actions {
     align-items: flex-start;
+  }
+  .zip-actions {
+    justify-content: flex-start;
   }
   .account {
     flex-direction: column;

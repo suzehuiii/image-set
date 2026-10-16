@@ -186,6 +186,7 @@ export default function ProjectPage() {
           <GenerationPanel
             projectId={id}
             creditBalance={user?.creditBalance ?? 0}
+            analysis={analysis}
             assets={assets}
             jobs={jobs}
             onRefresh={load}

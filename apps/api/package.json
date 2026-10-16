@@ -13,6 +13,7 @@
   "dependencies": {
     "@image-set/ai-provider": "workspace:*",
     "@image-set/database": "workspace:*",
+    "@image-set/image-layout": "workspace:*",
     "@image-set/shared": "workspace:*",
     "@nestjs/common": "^11.1.9",
     "@nestjs/core": "^11.1.9",
@@ -22,6 +23,7 @@
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
     "file-type": "^22.2.0",
+    "fflate": "^0.8.2",
     "image-size": "^2.0.4",
     "ioredis": "^5.8.2",
     "minio": "^8.0.6",
