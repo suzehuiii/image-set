@@ -50,10 +50,67 @@ export type {
 } from '@image-set/shared';
 
 export type OpenAiProviderConfig = {
+  /** OpenAI-compatible API endpoint, including its version path (for example, /v1). */
+  baseURL?: string;
   analysisModel?: string;
   imageModel?: string;
   reviewModel?: string;
 };
+
+export type OpenAiProviderPurpose = 'analysis' | 'image' | 'review';
+
+export type OpenAiProviderRouting = {
+  baseURL?: string;
+  dedicatedKeysEnabled: boolean;
+  apiKeys: Record<OpenAiProviderPurpose, string>;
+  models: Record<OpenAiProviderPurpose, string>;
+};
+
+const DEFAULT_MODELS: Record<OpenAiProviderPurpose, string> = {
+  analysis: 'gpt-6.1-sol',
+  image: 'gpt-image-2.5-sunburst',
+  review: 'gpt-6-luna',
+};
+
+function trimmed(value: string | undefined): string {
+  return value?.trim() ?? '';
+}
+
+/**
+ * Resolves either three purpose-specific keys or the legacy direct-OpenAI key.
+ * Once any purpose-specific key is supplied, the legacy key is deliberately not
+ * used. This prevents a partially configured gateway from silently sending a
+ * request to a different account or provider.
+ */
+export function resolveOpenAiProviderRouting(
+  environment: NodeJS.ProcessEnv = process.env,
+): OpenAiProviderRouting {
+  const dedicatedApiKeys = {
+    analysis: trimmed(environment.OPENAI_ANALYSIS_API_KEY),
+    image: trimmed(environment.OPENAI_IMAGE_API_KEY),
+    review: trimmed(environment.OPENAI_REVIEW_API_KEY),
+  };
+  const dedicatedKeysEnabled = Object.values(dedicatedApiKeys).some(Boolean);
+  const legacyApiKey = trimmed(environment.OPENAI_API_KEY);
+
+  return {
+    baseURL: trimmed(environment.OPENAI_BASE_URL) || undefined,
+    dedicatedKeysEnabled,
+    apiKeys: dedicatedKeysEnabled
+      ? dedicatedApiKeys
+      : {
+          analysis: legacyApiKey,
+          image: legacyApiKey,
+          review: legacyApiKey,
+        },
+    models: {
+      analysis:
+        trimmed(environment.OPENAI_ANALYSIS_MODEL) || DEFAULT_MODELS.analysis,
+      image: trimmed(environment.OPENAI_IMAGE_MODEL) || DEFAULT_MODELS.image,
+      review: trimmed(environment.OPENAI_REVIEW_MODEL) || DEFAULT_MODELS.review,
+    },
+  };
+}
 
 type ResponsesClient = Pick<OpenAI['responses'], 'parse'>;
 type ImagesClient = Pick<OpenAI['images'], 'edit'>;
@@ -285,9 +342,15 @@ export class OpenAiProvider implements AiProvider {
 
   private openAi(): OpenAI {
     if (!this.apiKey) {
-      throw new AiProviderError('AI_NOT_CONFIGURED', 'OPENAI_API_KEY 未配置');
+      throw new AiProviderError(
+        'AI_NOT_CONFIGURED',
+        '对应的 AI API Key 未配置',
+      );
     }
-    this.client ??= new OpenAI({ apiKey: this.apiKey });
+    this.client ??= new OpenAI({
+      apiKey: this.apiKey,
+      ...(this.config.baseURL ? { baseURL: this.config.baseURL } : {}),
+    });
     return this.client;
   }
 

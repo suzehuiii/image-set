@@ -1,6 +1,7 @@
 import {
   AiProviderError,
   OpenAiProvider,
+  resolveOpenAiProviderRouting,
   type AiImageAsset,
 } from '@image-set/ai-provider';
 import {
@@ -61,7 +62,7 @@ export class ImageGenerationRuntime
   );
   private readonly storage = this.createStorage();
   private readonly bucket = required('S3_BUCKET');
-  private provider?: OpenAiProvider;
+  private providers?: Record<'analysis' | 'image' | 'review', OpenAiProvider>;
 
   async onModuleInit(): Promise<void> {
     await migrateDatabase(this.database.pool);
@@ -83,7 +84,7 @@ export class ImageGenerationRuntime
         this.loadAssets(runtimeJob, snapshot.referenceAssetIds, 'reference'),
       ]);
       await this.progress(runtimeJob.id, 30, 'generating');
-      const generated = await this.ai().generateImage({
+      const generated = await this.ai('image').generateImage({
         role: snapshot.role,
         prompt: buildImagePrompt({
           role: snapshot.role,
@@ -118,7 +119,7 @@ export class ImageGenerationRuntime
         })
         .jpeg({ quality: 88, chromaSubsampling: '4:4:4' })
         .toBuffer();
-      const review = await this.ai().reviewConsistency({
+      const review = await this.ai('review').reviewConsistency({
         role: snapshot.role,
         productAssets,
         generatedAsset: {
@@ -421,13 +422,27 @@ export class ImageGenerationRuntime
     );
   }
 
-  private ai(): OpenAiProvider {
-    this.provider ??= new OpenAiProvider(process.env.OPENAI_API_KEY ?? '', {
-      analysisModel: process.env.OPENAI_ANALYSIS_MODEL ?? 'gpt-6.1-sol',
-      imageModel: process.env.OPENAI_IMAGE_MODEL ?? 'gpt-image-2.5-sunburst',
-      reviewModel: process.env.OPENAI_REVIEW_MODEL ?? 'gpt-6-luna',
-    });
-    return this.provider;
+  private ai(purpose: 'analysis' | 'image' | 'review'): OpenAiProvider {
+    this.providers ??= this.createProviders();
+    return this.providers[purpose];
+  }
+
+  private createProviders(): Record<
+    'analysis' | 'image' | 'review',
+    OpenAiProvider
+  > {
+    const routing = resolveOpenAiProviderRouting();
+    const config = {
+      baseURL: routing.baseURL,
+      analysisModel: routing.models.analysis,
+      imageModel: routing.models.image,
+      reviewModel: routing.models.review,
+    };
+    return {
+      analysis: new OpenAiProvider(routing.apiKeys.analysis, config),
+      image: new OpenAiProvider(routing.apiKeys.image, config),
+      review: new OpenAiProvider(routing.apiKeys.review, config),
+    };
   }
 
   private createStorage(): MinioClient {

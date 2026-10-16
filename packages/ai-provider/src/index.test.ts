@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { OpenAiProvider } from './index.js';
+import { OpenAiProvider, resolveOpenAiProviderRouting } from './index.js';
 
 const completeAnalysis = {
   productName: { en: 'Steel bottle', zh: '不锈钢水瓶' },
@@ -31,6 +31,38 @@ const completeAnalysis = {
 };
 
 describe('OpenAiProvider', () => {
+  it('routes every task to its dedicated gateway key without falling back', () => {
+    expect(
+      resolveOpenAiProviderRouting({
+        OPENAI_BASE_URL: 'https://gateway.example.com/v1',
+        OPENAI_API_KEY: 'official-fallback-key',
+        OPENAI_ANALYSIS_API_KEY: 'analysis-key',
+        OPENAI_IMAGE_API_KEY: 'image-key',
+        OPENAI_REVIEW_API_KEY: 'review-key',
+      }),
+    ).toMatchObject({
+      baseURL: 'https://gateway.example.com/v1',
+      dedicatedKeysEnabled: true,
+      apiKeys: {
+        analysis: 'analysis-key',
+        image: 'image-key',
+        review: 'review-key',
+      },
+    });
+  });
+
+  it('uses the explicitly documented legacy key only when no dedicated key exists', () => {
+    expect(
+      resolveOpenAiProviderRouting({
+        OPENAI_API_KEY: 'official-fallback-key',
+      }).apiKeys,
+    ).toEqual({
+      analysis: 'official-fallback-key',
+      image: 'official-fallback-key',
+      review: 'official-fallback-key',
+    });
+  });
+
   it('sends image data to Responses and validates structured output', async () => {
     const parse = vi.fn().mockResolvedValue({
       output_parsed: completeAnalysis,

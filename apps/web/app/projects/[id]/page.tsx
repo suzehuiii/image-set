@@ -2,7 +2,13 @@
 
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { type ChangeEvent, useCallback, useEffect, useState } from 'react';
+import {
+  type ChangeEvent,
+  type DragEvent,
+  useCallback,
+  useEffect,
+  useState,
+} from 'react';
 import {
   api,
   type Asset,
@@ -13,6 +19,8 @@ import {
 } from '../../lib/api';
 import { AnalysisEditor } from './analysis-editor';
 import { GenerationPanel } from './generation-panel';
+
+type UploadAssetType = 'product' | 'reference' | 'manual';
 
 export default function ProjectPage() {
   const { id } = useParams<{ id: string }>();
@@ -44,11 +52,7 @@ export default function ProjectPage() {
       setError(caught instanceof Error ? caught.message : '载入失败'),
     );
   }, [load]);
-  async function upload(
-    event: ChangeEvent<HTMLInputElement>,
-    assetType: 'product' | 'reference',
-  ) {
-    const files = Array.from(event.target.files ?? []);
+  async function upload(files: File[], assetType: UploadAssetType) {
     if (!files.length) return;
     setUploading(true);
     setError('');
@@ -61,16 +65,15 @@ export default function ProjectPage() {
           body: form,
         });
       }
-      await load();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '上传失败');
     } finally {
+      await load().catch(() => undefined);
       setUploading(false);
-      event.target.value = '';
     }
   }
   async function remove(assetId: string) {
-    if (!confirm('删除这张素材？')) return;
+    if (!confirm('删除这个素材？')) return;
     await api(`/assets/${assetId}`, { method: 'DELETE' });
     setAssets((current) => current.filter((asset) => asset.id !== assetId));
   }
@@ -185,6 +188,15 @@ export default function ProjectPage() {
           onUpload={upload}
           onRemove={remove}
         />
+        <UploadGroup
+          title="产品说明书"
+          hint="可选，1 份 PDF/DOC/DOCX，≤15MB"
+          type="manual"
+          assets={assets}
+          uploading={uploading}
+          onUpload={upload}
+          onRemove={remove}
+        />
       </section>
       {analysis ? (
         <>
@@ -239,16 +251,35 @@ function UploadGroup({
 }: {
   title: string;
   hint: string;
-  type: 'product' | 'reference';
+  type: UploadAssetType;
   assets: Asset[];
   uploading: boolean;
-  onUpload: (
-    event: ChangeEvent<HTMLInputElement>,
-    type: 'product' | 'reference',
-  ) => void;
+  onUpload: (files: File[], type: UploadAssetType) => Promise<void>;
   onRemove: (id: string) => void;
 }) {
+  const [dragging, setDragging] = useState(false);
   const filtered = assets.filter((asset) => asset.assetType === type);
+  const isManual = type === 'manual';
+  const limit = type === 'product' ? 10 : type === 'reference' ? 4 : 1;
+  const atLimit = filtered.length >= limit;
+  const disabled = uploading || atLimit;
+  const accept = isManual
+    ? '.pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    : 'image/jpeg,image/png,image/webp';
+
+  async function selectFiles(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget;
+    await onUpload(Array.from(input.files ?? []), type);
+    input.value = '';
+  }
+
+  async function dropFiles(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    setDragging(false);
+    if (disabled) return;
+    await onUpload(Array.from(event.dataTransfer.files), type);
+  }
+
   return (
     <section className="upload-card">
       <div className="section-head">
@@ -256,43 +287,88 @@ function UploadGroup({
           <h2>{title}</h2>
           <p>{hint}</p>
         </div>
-        <label className="primary link-button">
-          {uploading ? '上传中…' : '选择图片'}
-          <input
-            hidden
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            multiple
-            disabled={uploading}
-            onChange={(event) => onUpload(event, type)}
-          />
-        </label>
       </div>
+      <label
+        className={`upload-dropzone${dragging ? ' dragging' : ''}${disabled ? ' disabled' : ''}${uploading ? ' uploading' : ''}`}
+        onDragEnter={(event) => {
+          event.preventDefault();
+          if (!disabled) setDragging(true);
+        }}
+        onDragOver={(event) => event.preventDefault()}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(event) => void dropFiles(event)}
+      >
+        <span className="upload-icon" aria-hidden="true">
+          {isManual ? 'DOC' : '↑'}
+        </span>
+        <strong>
+          {uploading
+            ? '正在上传…'
+            : atLimit
+              ? isManual
+                ? '已上传说明书'
+                : `已达到 ${limit} 张上限`
+              : isManual
+                ? '拖拽说明书到这里'
+                : '拖拽图片到这里'}
+        </strong>
+        <small>
+          {atLimit
+            ? `如需更换，请先删除已有${isManual ? '文件' : '图片'}`
+            : `或点击选择${isManual ? '文件' : '图片'}`}
+        </small>
+        <input
+          className="visually-hidden"
+          type="file"
+          accept={accept}
+          multiple={!isManual}
+          disabled={disabled}
+          onChange={(event) => void selectFiles(event)}
+        />
+      </label>
       <div className="asset-grid">
         {filtered.map((asset) => (
           <article className="asset" key={asset.id}>
-            <img
-              src={`/api/assets/${asset.id}/content`}
-              alt={asset.originalName}
-            />
+            {isManual ? (
+              <span className="document-preview" aria-hidden="true">
+                {asset.originalName.split('.').pop()?.toUpperCase() ?? 'DOC'}
+              </span>
+            ) : (
+              <img
+                src={`/api/assets/${asset.id}/content`}
+                alt={asset.originalName}
+              />
+            )}
             <div>
               <strong>{asset.originalName}</strong>
               <small>
-                {asset.width} × {asset.height} ·{' '}
+                {asset.width && asset.height
+                  ? `${asset.width} × ${asset.height} · `
+                  : ''}
                 {(asset.fileSize / 1024 / 1024).toFixed(1)} MB
               </small>
-              <button
-                type="button"
-                className="text-danger"
-                aria-label={`删除 ${asset.originalName}`}
-                onClick={() => onRemove(asset.id)}
-              >
-                删除
-              </button>
+              <div className="asset-actions">
+                {isManual && (
+                  <a
+                    href={`/api/assets/${asset.id}/content`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    查看
+                  </a>
+                )}
+                <button
+                  type="button"
+                  className="text-danger"
+                  aria-label={`删除 ${asset.originalName}`}
+                  onClick={() => onRemove(asset.id)}
+                >
+                  删除
+                </button>
+              </div>
             </div>
           </article>
         ))}
-        {filtered.length === 0 && <p className="placeholder">尚未上传</p>}
       </div>
     </section>
   );

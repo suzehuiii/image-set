@@ -20,12 +20,12 @@ export type { ConsistencyReviewResult, ImageRole } from '@image-set/shared';
 export type Asset = {
   id: string;
   projectId: string;
-  assetType: 'product' | 'reference' | 'generated' | 'export';
+  assetType: 'product' | 'reference' | 'manual' | 'generated' | 'export';
   imageRole: ImageRole | null;
   originalName: string;
   mimeType: string;
-  width: number;
-  height: number;
+  width: number | null;
+  height: number | null;
   fileSize: number;
   qaResult: ConsistencyReviewResult | null;
   createdAt: string;

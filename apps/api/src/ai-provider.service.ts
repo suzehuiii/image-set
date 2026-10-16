@@ -1,5 +1,6 @@
 import {
   OpenAiProvider,
+  resolveOpenAiProviderRouting,
   type AiProvider,
   type ConsistencyReviewInput,
   type ConsistencyReviewResult,
@@ -12,28 +13,42 @@ import { Injectable } from '@nestjs/common';
 
 @Injectable()
 export class AiProviderService implements AiProvider {
-  private provider?: OpenAiProvider;
+  private providers?: Record<'analysis' | 'image' | 'review', OpenAiProvider>;
 
   analyzeProduct(input: ProductAnalysisInput): Promise<ProductAnalysisResult> {
-    return this.instance().analyzeProduct(input);
+    return this.instance('analysis').analyzeProduct(input);
   }
 
   generateImage(input: ImageGenerationInput): Promise<GeneratedImageResult> {
-    return this.instance().generateImage(input);
+    return this.instance('image').generateImage(input);
   }
 
   reviewConsistency(
     input: ConsistencyReviewInput,
   ): Promise<ConsistencyReviewResult> {
-    return this.instance().reviewConsistency(input);
+    return this.instance('review').reviewConsistency(input);
   }
 
-  private instance(): OpenAiProvider {
-    this.provider ??= new OpenAiProvider(process.env.OPENAI_API_KEY ?? '', {
-      analysisModel: process.env.OPENAI_ANALYSIS_MODEL ?? 'gpt-6.1-sol',
-      imageModel: process.env.OPENAI_IMAGE_MODEL ?? 'gpt-image-2.5-sunburst',
-      reviewModel: process.env.OPENAI_REVIEW_MODEL ?? 'gpt-6-luna',
-    });
-    return this.provider;
+  private instance(purpose: 'analysis' | 'image' | 'review'): OpenAiProvider {
+    this.providers ??= this.createProviders();
+    return this.providers[purpose];
+  }
+
+  private createProviders(): Record<
+    'analysis' | 'image' | 'review',
+    OpenAiProvider
+  > {
+    const routing = resolveOpenAiProviderRouting();
+    const config = {
+      baseURL: routing.baseURL,
+      analysisModel: routing.models.analysis,
+      imageModel: routing.models.image,
+      reviewModel: routing.models.review,
+    };
+    return {
+      analysis: new OpenAiProvider(routing.apiKeys.analysis, config),
+      image: new OpenAiProvider(routing.apiKeys.image, config),
+      review: new OpenAiProvider(routing.apiKeys.review, config),
+    };
   }
 }

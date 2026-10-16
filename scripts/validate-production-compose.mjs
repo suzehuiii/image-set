@@ -13,7 +13,10 @@ const environment = {
   S3_ACCESS_KEY: 'validation-access-key',
   S3_SECRET_KEY: 'validation-secret-key',
   S3_BUCKET: 'image-set-validation',
-  OPENAI_API_KEY: 'validation-only',
+  OPENAI_BASE_URL: 'https://gateway.example.com/v1',
+  OPENAI_ANALYSIS_API_KEY: 'validation-analysis-only',
+  OPENAI_IMAGE_API_KEY: 'validation-image-only',
+  OPENAI_REVIEW_API_KEY: 'validation-review-only',
 };
 
 const result = spawnSync(

@@ -7,7 +7,7 @@
 - 64 位 Linux 主机，安装 Docker Engine 与 Docker Compose v2/v5。
 - 一个解析到主机的域名，以及该域名的 TLS 证书。
 - 外部 PostgreSQL 17、启用持久化的 Redis、受维护的 S3 兼容对象存储。
-- 受限权限的 OpenAI API Key；不得写入镜像、Git 或 Compose 文件。
+- 三把按功能隔离的中转站 API Key，或一把受限权限的 OpenAI 直连兼容 Key；不得写入镜像、Git 或 Compose 文件。
 - 防火墙仅公开 80/443；PostgreSQL、Redis、对象存储管理端口只允许受信网络访问。
 
 生产编排不会启动本地 PostgreSQL、Redis 或 Legacy MinIO。应用容器仅连接 `backend` 内部网络，只有 Nginx 发布主机端口。
@@ -31,7 +31,8 @@ chmod 600 /opt/image-set/secrets/image-set.env
 - `REDIS_URL` 推荐 `rediss://` 并配置认证。
 - `S3_ENDPOINT` 和 `S3_PUBLIC_ENDPOINT` 必须为 HTTPS；后者必须是浏览器可访问且参与签名的域名。
 - `S3_ACCESS_KEY` 只授予目标 bucket 的读写删权限。
-- `OPENAI_API_KEY` 使用项目级、限预算、可轮换密钥。
+- 中转站模式设置 `OPENAI_BASE_URL`（必须为含 `/v1` 的 HTTPS OpenAI 兼容端点）及 `OPENAI_ANALYSIS_API_KEY`、`OPENAI_IMAGE_API_KEY`、`OPENAI_REVIEW_API_KEY` 三把独立密钥。
+- `OPENAI_API_KEY` 是官网直连兼容回退：仅当三把专项 Key 都为空时才会使用；一旦设置任一专项 Key，运行时绝不会混用该旧 Key。
 - `TLS_CERT_DIR` 是主机证书目录，内含 `fullchain.pem` 和 `privkey.pem`。
 
 API 在 `DEPLOYMENT_ENV=production` 时会拒绝缺失必填值、非安全 Cookie、HTTP 对象存储端点、HTTP Web Origin 和明显的本地占位凭证。

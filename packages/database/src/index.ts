@@ -151,6 +151,30 @@ export async function migrateDatabase(pool: Pool): Promise<void> {
       `);
       await client.query('insert into schema_migrations(version) values (3)');
     }
+    const versionFour = await client.query<{ version: number }>(
+      'select version from schema_migrations where version = 4',
+    );
+    if (versionFour.rowCount === 0) {
+      await client.query(`
+        alter table assets drop constraint if exists assets_asset_type_check;
+        alter table assets add constraint assets_asset_type_check
+          check (asset_type in ('product', 'reference', 'manual', 'generated', 'export'));
+        alter table assets alter column width drop not null;
+        alter table assets alter column height drop not null;
+        alter table assets drop constraint if exists assets_width_check;
+        alter table assets drop constraint if exists assets_height_check;
+        alter table assets add constraint assets_width_check check (width is null or width > 0);
+        alter table assets add constraint assets_height_check check (height is null or height > 0);
+        alter table assets add constraint assets_dimensions_match_type_check check (
+          (asset_type = 'manual' and width is null and height is null)
+          or
+          (asset_type <> 'manual' and width is not null and height is not null)
+        );
+        create unique index assets_one_manual_per_project_idx
+          on assets(project_id) where asset_type = 'manual' and deleted_at is null;
+      `);
+      await client.query('insert into schema_migrations(version) values (4)');
+    }
     await client.query('commit');
   } catch (error) {
     await client.query('rollback');

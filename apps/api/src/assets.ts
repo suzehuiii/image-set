@@ -14,8 +14,6 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { fileTypeFromBuffer } from 'file-type';
-import { imageSize } from 'image-size';
 import { Client as MinioClient } from 'minio';
 import type { Response } from 'express';
 import { createHash, randomUUID } from 'node:crypto';
@@ -25,12 +23,11 @@ import type { ProductAnalysisAsset } from '@image-set/ai-provider';
 import { AuthGuard, CurrentUser, type AuthUser } from './auth.js';
 import { DatabaseService } from './database.service.js';
 import { ProjectsService } from './projects.js';
-
-const MIME_EXTENSIONS = new Map([
-  ['image/jpeg', 'jpg'],
-  ['image/png', 'png'],
-  ['image/webp', 'webp'],
-]);
+import {
+  inspectUpload,
+  parseUploadAssetType,
+  type UploadAssetType,
+} from './upload-validation.js';
 
 function required(name: string): string {
   const value = process.env[name];
@@ -57,8 +54,8 @@ type AssetRow = {
   imageRole: string | null;
   originalName: string;
   mimeType: string;
-  width: number;
-  height: number;
+  width: number | null;
+  height: number | null;
   fileSize: number;
   status: string;
   qaResult: Record<string, unknown> | null;
@@ -97,54 +94,22 @@ export class AssetsService {
     assetType: string,
     file: Express.Multer.File | undefined,
   ): Promise<AssetRow> {
-    if (assetType !== 'product' && assetType !== 'reference') {
-      throw new BadRequestException('assetType 必须是 product 或 reference');
-    }
-    if (!file) throw new BadRequestException('请选择图片');
+    const parsedAssetType = parseUploadAssetType(assetType);
+    if (!file) throw new BadRequestException('请选择要上传的文件');
     await this.projects.findOwned(userId, projectId);
-    const detected = await fileTypeFromBuffer(file.buffer);
-    const extension = detected ? MIME_EXTENSIONS.get(detected.mime) : undefined;
-    if (
-      !detected ||
-      !extension ||
-      (file.mimetype !== detected.mime &&
-        file.mimetype !== 'application/octet-stream')
-    ) {
-      throw new BadRequestException('仅支持真实的 JPG、PNG 或 WebP 图片');
-    }
-    let dimensions: ReturnType<typeof imageSize>;
-    try {
-      dimensions = imageSize(file.buffer);
-    } catch {
-      throw new BadRequestException('图片已损坏或无法读取');
-    }
-    if (!dimensions.width || !dimensions.height)
-      throw new BadRequestException('无法读取图片尺寸');
-    if (
-      dimensions.width < 256 ||
-      dimensions.height < 256 ||
-      dimensions.width > 12000 ||
-      dimensions.height > 12000 ||
-      dimensions.width * dimensions.height > 40_000_000
-    ) {
-      throw new BadRequestException(
-        '图片边长须为 256–12000 像素且不超过 4000 万像素',
-      );
-    }
-    const limit = assetType === 'product' ? 10 : 4;
+    const inspection = await inspectUpload(parsedAssetType, file);
+    const limit = this.assetLimit(parsedAssetType);
     const count = await this.database.client.pool.query<{ count: number }>(
       `select count(*)::int as count from assets
        where project_id = $1 and owner_user_id = $2 and asset_type = $3 and deleted_at is null`,
-      [projectId, userId, assetType],
+      [projectId, userId, parsedAssetType],
     );
     if ((count.rows[0]?.count ?? 0) >= limit) {
-      throw new BadRequestException(
-        `${assetType === 'product' ? '商品图' : '参考图'}最多 ${limit} 张`,
-      );
+      throw new BadRequestException(this.limitMessage(parsedAssetType, limit));
     }
 
     const id = randomUUID();
-    const objectKey = `${userId}/${projectId}/${id}.${extension}`;
+    const objectKey = `${userId}/${projectId}/${id}.${inspection.extension}`;
     const checksum = createHash('sha256').update(file.buffer).digest('hex');
     await this.storage.putObject(
       this.bucket,
@@ -152,7 +117,7 @@ export class AssetsService {
       file.buffer,
       file.size,
       {
-        'Content-Type': detected.mime,
+        'Content-Type': inspection.mimeType,
         'x-amz-meta-sha256': checksum,
       },
     );
@@ -168,12 +133,12 @@ export class AssetsService {
           id,
           projectId,
           userId,
-          assetType,
+          parsedAssetType,
           objectKey,
           file.originalname.slice(0, 255),
-          detected.mime,
-          dimensions.width,
-          dimensions.height,
+          inspection.mimeType,
+          inspection.width,
+          inspection.height,
           file.size,
           checksum,
         ],
@@ -187,8 +152,29 @@ export class AssetsService {
       await this.storage
         .removeObject(this.bucket, objectKey)
         .catch(() => undefined);
+      if (
+        parsedAssetType === 'manual' &&
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        error.code === '23505'
+      ) {
+        throw new BadRequestException('每个项目最多上传 1 份产品说明书');
+      }
       throw error;
     }
+  }
+
+  private assetLimit(assetType: UploadAssetType): number {
+    if (assetType === 'product') return 10;
+    if (assetType === 'reference') return 4;
+    return 1;
+  }
+
+  private limitMessage(assetType: UploadAssetType, limit: number): string {
+    if (assetType === 'product') return `商品图最多 ${limit} 张`;
+    if (assetType === 'reference') return `参考图最多 ${limit} 张`;
+    return '每个项目最多上传 1 份产品说明书';
   }
 
   async remove(userId: string, assetId: string): Promise<void> {

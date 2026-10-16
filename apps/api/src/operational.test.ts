@@ -64,4 +64,32 @@ describe('operational safeguards', () => {
       }),
     ).toEqual([]);
   });
+
+  it('accepts three dedicated gateway keys and rejects a partial set', () => {
+    const gatewayEnvironment = {
+      DEPLOYMENT_ENV: 'production',
+      COOKIE_SECURE: 'true',
+      WEB_ORIGIN: 'https://studio.example.com',
+      DATABASE_URL: 'postgresql://image_set:secret@db.example.com/image_set',
+      REDIS_URL: 'rediss://redis.example.com',
+      S3_ENDPOINT: 'https://storage.example.com',
+      S3_PUBLIC_ENDPOINT: 'https://assets.example.com',
+      S3_ACCESS_KEY: 'access-key',
+      S3_SECRET_KEY: 'secret-key',
+      S3_BUCKET: 'image-set',
+      OPENAI_BASE_URL: 'https://gateway.example.com/v1',
+      OPENAI_ANALYSIS_API_KEY: 'analysis-key',
+      OPENAI_IMAGE_API_KEY: 'image-key',
+      OPENAI_REVIEW_API_KEY: 'review-key',
+    };
+    expect(validateProductionEnvironment(gatewayEnvironment)).toEqual([]);
+    expect(
+      validateProductionEnvironment({
+        ...gatewayEnvironment,
+        OPENAI_IMAGE_API_KEY: '',
+      }),
+    ).toContain(
+      'OPENAI_IMAGE_API_KEY is required when using dedicated AI keys',
+    );
+  });
 });

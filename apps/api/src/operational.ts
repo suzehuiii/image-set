@@ -8,6 +8,7 @@ import {
   type NestMiddleware,
   type OnModuleDestroy,
 } from '@nestjs/common';
+import { resolveOpenAiProviderRouting } from '@image-set/ai-provider';
 import { createHash, randomUUID } from 'node:crypto';
 import type { NextFunction, Request, Response } from 'express';
 import { Redis } from 'ioredis';
@@ -104,12 +105,27 @@ export function validateProductionEnvironment(
     'S3_ACCESS_KEY',
     'S3_SECRET_KEY',
     'S3_BUCKET',
-    'OPENAI_API_KEY',
     'WEB_ORIGIN',
   ];
   const errors = required
     .filter((name) => !environment[name]?.trim())
     .map((name) => `${name} is required`);
+  const aiRouting = resolveOpenAiProviderRouting(environment);
+  if (aiRouting.dedicatedKeysEnabled) {
+    for (const name of [
+      'OPENAI_ANALYSIS_API_KEY',
+      'OPENAI_IMAGE_API_KEY',
+      'OPENAI_REVIEW_API_KEY',
+    ] as const) {
+      if (!environment[name]?.trim()) {
+        errors.push(`${name} is required when using dedicated AI keys`);
+      }
+    }
+  } else if (!environment.OPENAI_API_KEY?.trim()) {
+    errors.push(
+      'OPENAI_API_KEY is required when dedicated AI keys are not configured',
+    );
+  }
   if (environment.COOKIE_SECURE !== 'true') {
     errors.push('COOKIE_SECURE must be true');
   }
@@ -125,6 +141,12 @@ export function validateProductionEnvironment(
     if (value && !value.startsWith('https://')) {
       errors.push(`${name} must use HTTPS`);
     }
+  }
+  if (
+    environment.OPENAI_BASE_URL &&
+    !environment.OPENAI_BASE_URL.startsWith('https://')
+  ) {
+    errors.push('OPENAI_BASE_URL must use HTTPS');
   }
   for (const name of [
     'DATABASE_URL',
