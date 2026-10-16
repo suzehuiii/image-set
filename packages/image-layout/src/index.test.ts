@@ -33,7 +33,7 @@ describe('default image layout', () => {
   });
 
   it('uses the MVP export dimensions', () => {
-    expect(getDefaultLayout('feature')).toMatchObject({
+    expect(getDefaultLayout('feature_1')).toMatchObject({
       width: 2048,
       height: 2048,
     });
@@ -54,14 +54,14 @@ describe('default image layout', () => {
   });
 
   it('uses saved English plan copy and never returns copy for the main image', () => {
-    expect(marketingCopyForRole(analysis, 'feature')).toBe(
+    expect(marketingCopyForRole(analysis, 'feature_1')).toBe(
       'Durable & easy to use',
     );
     expect(marketingCopyForRole(analysis, 'main')).toBe('');
   });
 
   it('escapes marketing copy in the deterministic SVG template', () => {
-    const overlay = buildMarketingOverlay('feature', 'Fast & <simple>');
+    const overlay = buildMarketingOverlay('feature_1', 'Fast & <simple>');
     expect(overlay?.toString()).toContain('Fast &amp; &lt;simple&gt;');
     expect(buildMarketingOverlay('main', 'Forbidden')).toBeUndefined();
   });
@@ -86,7 +86,7 @@ describe('default image layout', () => {
       }),
       renderExportImage({
         source,
-        role: 'feature',
+        role: 'feature_1',
         copy: 'Durable & easy to use',
         format: 'jpg',
       }),

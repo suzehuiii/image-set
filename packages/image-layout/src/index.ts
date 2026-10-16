@@ -1,5 +1,9 @@
 import sharp from 'sharp';
-import type { ImageRole, ProductAnalysisResult } from '@image-set/shared';
+import {
+  imageRoleKind,
+  type ImageRole,
+  type ProductAnalysisResult,
+} from '@image-set/shared';
 
 export const EXPORT_SIZE = 2048;
 
@@ -39,10 +43,20 @@ const PLATFORM_RULES: Record<string, string> = {
 
 const ROLE_DIRECTIONS: Record<ImageRole, string> = {
   main: '生成干净的纯白背景商品主图。不得出现文字、图形、道具、手、额外包装或装饰性场景。',
-  feature:
-    '画面只演示一个经过验证的商品卖点，并主动留出负空间，供排版系统后续添加文案。',
-  lifestyle:
-    '把商品放入符合商品事实、真实且比例合理的使用场景，不得暗示未经验证的用途或性能。',
+  feature_1:
+    '功能卖点图 1：突出最核心且证据最充分的购买理由，商品保持大面积主体，并为标题留出负空间。',
+  feature_2:
+    '功能卖点图 2：解释第二个不同的已验证功能或工作原理，可使用局部放大构图，但不得复制功能图 1。',
+  feature_3:
+    '功能卖点图 3：展示真实结构、材质、操作或配件带来的不同价值，构图必须与前两张功能图明显不同。',
+  feature_4:
+    '功能卖点图 4：展示另一个有证据的卖点、使用步骤或包装内容；没有足够事实时采用保守的真实细节表达，不得编造参数。',
+  lifestyle_1:
+    '场景图 1：把商品放入最典型、已确认且比例真实的使用环境，商品必须清晰可辨，不得只是包装和配件陈列。',
+  lifestyle_2:
+    '场景图 2：使用不同视角、距离或另一种已确认的使用情境，不能重复场景图 1 的背景与构图。',
+  lifestyle_3:
+    '场景图 3：用更具氛围感但仍真实的构图展示商品与环境的关系，不得暗示未经验证的用途、性能或适用环境。',
   detail:
     '生成准确的局部特写，突出参考图中真实可见的材质、表面、接口或结构细节，不得虚构内部零件。',
 };
@@ -96,7 +110,8 @@ export function buildMarketingOverlay(
   copy: string,
 ): Buffer | undefined {
   const normalized = copy.replace(/\s+/g, ' ').trim();
-  if (role === 'main' || !normalized) return undefined;
+  const roleKind = imageRoleKind(role);
+  if (roleKind === 'main' || !normalized) return undefined;
   const settings = {
     feature: {
       maxChars: 28,
@@ -131,7 +146,7 @@ export function buildMarketingOverlay(
       background:
         '<rect x="96" y="1530" width="1856" height="398" rx="38" fill="#ffffff" fill-opacity="0.92"/><rect x="96" y="1530" width="18" height="398" rx="9" fill="#d65f50"/>',
     },
-  }[role];
+  }[roleKind];
   const lines = wrapCopy(normalized, settings.maxChars, settings.maxLines);
   const tspans = lines
     .map(

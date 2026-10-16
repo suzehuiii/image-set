@@ -175,6 +175,30 @@ export async function migrateDatabase(pool: Pool): Promise<void> {
       `);
       await client.query('insert into schema_migrations(version) values (4)');
     }
+    const versionFive = await client.query<{ version: number }>(
+      'select version from schema_migrations where version = 5',
+    );
+    if (versionFive.rowCount === 0) {
+      await client.query(`
+        alter table assets drop constraint if exists assets_image_role_check;
+        alter table assets add constraint assets_image_role_check check (
+          image_role is null or image_role in (
+            'main', 'feature', 'lifestyle', 'detail',
+            'feature_1', 'feature_2', 'feature_3', 'feature_4',
+            'lifestyle_1', 'lifestyle_2', 'lifestyle_3'
+          )
+        );
+        alter table generation_jobs drop constraint if exists generation_jobs_image_role_check;
+        alter table generation_jobs add constraint generation_jobs_image_role_check check (
+          image_role is null or image_role in (
+            'main', 'feature', 'lifestyle', 'detail',
+            'feature_1', 'feature_2', 'feature_3', 'feature_4',
+            'lifestyle_1', 'lifestyle_2', 'lifestyle_3'
+          )
+        );
+      `);
+      await client.query('insert into schema_migrations(version) values (5)');
+    }
     await client.query('commit');
   } catch (error) {
     await client.query('rollback');

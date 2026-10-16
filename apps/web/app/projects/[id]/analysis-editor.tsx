@@ -1,11 +1,17 @@
 'use client';
 
 import type { ProductAnalysisResult } from '../../lib/api';
+import type { ImageRole } from '@image-set/shared';
 
-const ROLE_LABELS = {
+const ROLE_LABELS: Record<ImageRole, string> = {
   main: '白底主图',
-  feature: '功能卖点图',
-  lifestyle: '使用场景图',
+  feature_1: '功能卖点图 1',
+  feature_2: '功能卖点图 2',
+  feature_3: '功能卖点图 3',
+  feature_4: '功能卖点图 4',
+  lifestyle_1: '使用场景图 1',
+  lifestyle_2: '使用场景图 2',
+  lifestyle_3: '使用场景图 3',
   detail: '材质 / 细节图',
 };
 

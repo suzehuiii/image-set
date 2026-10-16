@@ -11,8 +11,13 @@ import { api, type Asset, type Job } from '../../lib/api';
 
 const ROLE_LABELS: Record<ImageRole, string> = {
   main: '白底主图',
-  feature: '功能卖点图',
-  lifestyle: '使用场景图',
+  feature_1: '功能卖点图 1',
+  feature_2: '功能卖点图 2',
+  feature_3: '功能卖点图 3',
+  feature_4: '功能卖点图 4',
+  lifestyle_1: '使用场景图 1',
+  lifestyle_2: '使用场景图 2',
+  lifestyle_3: '使用场景图 3',
   detail: '材质 / 细节图',
 };
 
@@ -138,19 +143,19 @@ export function GenerationPanel({
     <section className="generation-section" aria-busy={active}>
       <div className="section-head generation-heading">
         <div>
-          <p className="eyebrow">FOUR-IMAGE SET</p>
+          <p className="eyebrow">NINE-IMAGE SET</p>
           <h2>生成商品套图</h2>
-          <p>四张图独立执行与结算；单张失败会自动退款，不影响成功结果。</p>
+          <p>九张图独立执行与结算；单张失败会自动退款，不影响成功结果。</p>
         </div>
         <div className="generation-actions">
           <span>当前余额 {creditBalance}</span>
           <button
             type="button"
             className="primary"
-            disabled={pending || active || creditBalance < 12}
+            disabled={pending || active || creditBalance < 27}
             onClick={() => create()}
           >
-            {active ? '套图生成中…' : '生成完整四图 · 12 额度'}
+            {active ? '套图生成中…' : '生成完整九图 · 27 额度'}
           </button>
           <div className="zip-actions">
             <button

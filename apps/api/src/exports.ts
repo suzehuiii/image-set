@@ -111,7 +111,7 @@ export class ExportsService {
         throw new BadRequestException(
           requestedRole
             ? '该图尚未生成成功，无法导出'
-            : '请先完成四张图片后再导出整套 ZIP',
+            : '请先完成九张图片后再导出整套 ZIP',
         );
       }
       return source;

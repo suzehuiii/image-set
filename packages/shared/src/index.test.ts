@@ -20,8 +20,18 @@ describe('shared contracts', () => {
     expect(result.success).toBe(true);
   });
 
-  it('defines the four MVP image roles', () => {
-    expect(IMAGE_ROLES).toEqual(['main', 'feature', 'lifestyle', 'detail']);
+  it('defines the nine ecommerce image slots', () => {
+    expect(IMAGE_ROLES).toEqual([
+      'main',
+      'feature_1',
+      'feature_2',
+      'feature_3',
+      'feature_4',
+      'lifestyle_1',
+      'lifestyle_2',
+      'lifestyle_3',
+      'detail',
+    ]);
   });
 
   it('validates a complete bilingual product analysis', () => {
@@ -48,7 +58,7 @@ describe('shared contracts', () => {
     expect(result.success).toBe(true);
   });
 
-  it('rejects an image plan without all four ordered roles', () => {
+  it('rejects an image plan without all nine ordered roles', () => {
     const invalid = productAnalysisSchema.safeParse({
       productName: { en: 'Bottle', zh: '杯子' },
       title: { en: 'Bottle', zh: '杯子' },

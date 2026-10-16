@@ -12,8 +12,26 @@ export const healthResponseSchema = z.object({
 export type DependencyStatus = z.infer<typeof dependencyStatusSchema>;
 export type HealthResponse = z.infer<typeof healthResponseSchema>;
 
-export const IMAGE_ROLES = ['main', 'feature', 'lifestyle', 'detail'] as const;
+export const IMAGE_ROLES = [
+  'main',
+  'feature_1',
+  'feature_2',
+  'feature_3',
+  'feature_4',
+  'lifestyle_1',
+  'lifestyle_2',
+  'lifestyle_3',
+  'detail',
+] as const;
 export type ImageRole = (typeof IMAGE_ROLES)[number];
+
+export type ImageRoleKind = 'main' | 'feature' | 'lifestyle' | 'detail';
+
+export function imageRoleKind(role: ImageRole): ImageRoleKind {
+  if (role === 'main' || role === 'detail') return role;
+  if (role.startsWith('feature_')) return 'feature';
+  return 'lifestyle';
+}
 
 export const bilingualTextSchema = z.object({
   en: z.string().trim().min(1).max(2_000),
@@ -55,7 +73,7 @@ export const productAnalysisOutputSchema = z.object({
         copyZh: z.string().trim().max(200),
       }),
     )
-    .length(4),
+    .length(IMAGE_ROLES.length),
 });
 
 export const productAnalysisSchema = productAnalysisOutputSchema.superRefine(

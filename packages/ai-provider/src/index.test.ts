@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { IMAGE_ROLES } from '@image-set/shared';
 
 import { OpenAiProvider, resolveOpenAiProviderRouting } from './index.js';
 
@@ -16,17 +17,12 @@ const completeAnalysis = {
   description: { en: 'A reusable bottle.', zh: '一款可重复使用的水瓶。' },
   missingInformation: ['Capacity is not visible.'],
   complianceFlags: [],
-  imagePlan: [
-    ['main', '', ''],
-    ['feature', 'Reusable', '可重复使用'],
-    ['lifestyle', 'Everyday hydration', '日常饮水'],
-    ['detail', 'Clean finish', '简洁表面'],
-  ].map(([role, copyEn, copyZh]) => ({
+  imagePlan: IMAGE_ROLES.map((role) => ({
     role,
     objective: `Create the ${role} image`,
     visualDirection: 'Preserve the real product appearance.',
-    copyEn,
-    copyZh,
+    copyEn: role === 'main' ? '' : `Benefit for ${role}`,
+    copyZh: role === 'main' ? '' : `${role} 卖点`,
   })),
 };
 

@@ -12,6 +12,7 @@ import {
 import { buildImagePrompt } from '@image-set/image-layout';
 import {
   generationSnapshotSchema,
+  IMAGE_ROLES,
   imageQueuePayloadSchema,
   type ConsistencyReviewResult,
   type GenerationSnapshot,
@@ -412,13 +413,14 @@ export class ImageGenerationRuntime
          when (
            select count(distinct image_role) from assets
            where project_id = $1 and owner_user_id = $2 and asset_type = 'generated'
+             and image_role = any($3::text[])
              and status = 'ready' and deleted_at is null
-         ) = 4 then 'completed'
+         ) = $4 then 'completed'
          when analysis_result is not null then 'ready'
          else 'failed'
        end, updated_at = now()
        where id = $1 and user_id = $2`,
-      [projectId, userId],
+      [projectId, userId, IMAGE_ROLES, IMAGE_ROLES.length],
     );
   }
 

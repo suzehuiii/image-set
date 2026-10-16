@@ -27,7 +27,7 @@ import { AuthGuard, CurrentUser, type AuthUser } from './auth.js';
 import { DatabaseService } from './database.service.js';
 
 const ANALYSIS_CREDITS = 1;
-const PROMPT_VERSION = 'product-analysis-zh-v2';
+const PROMPT_VERSION = 'product-analysis-nine-image-zh-v3';
 
 type AnalysisProject = {
   id: string;
