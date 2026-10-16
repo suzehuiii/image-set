@@ -10,10 +10,12 @@ export type Project = {
   targetPlatform: string;
   productCategory: string | null;
   productBrief: Record<string, unknown>;
+  analysisResult: ProductAnalysisResult | null;
   status: string;
   assetCount: number;
   updatedAt: string;
 };
+export type { ProductAnalysisResult } from '@image-set/shared';
 export type Asset = {
   id: string;
   projectId: string;
@@ -41,3 +43,4 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   if (!response.ok) throw new Error(body.message ?? '请求失败，请稍后重试');
   return body;
 }
+import type { ProductAnalysisResult } from '@image-set/shared';

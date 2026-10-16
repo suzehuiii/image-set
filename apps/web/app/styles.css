@@ -329,6 +329,13 @@ textarea:focus {
   padding: 11px 13px;
   border-radius: 10px;
 }
+.success {
+  margin: 0;
+  color: #176c42;
+  background: #eaf8f0;
+  padding: 11px 13px;
+  border-radius: 10px;
+}
 .banner {
   margin: 20px 0;
 }
@@ -424,6 +431,70 @@ textarea:focus {
 .next-step h2 {
   margin: 8px 0;
 }
+.analysis-cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+}
+.analysis-cta-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  white-space: nowrap;
+}
+.analysis-card {
+  margin-top: 24px;
+  padding: 30px;
+  border: 1px solid #e5ded9;
+  border-radius: 22px;
+  background: white;
+}
+.analysis-heading {
+  margin: 0 0 8px;
+}
+.analysis-heading h2,
+.analysis-section h3 {
+  margin: 6px 0;
+}
+.action-row {
+  display: flex;
+  gap: 10px;
+}
+.analysis-section {
+  padding: 24px 0;
+  border-top: 1px solid #eee8e4;
+}
+.analysis-section h3 {
+  margin-bottom: 16px;
+}
+.selling-points,
+.plan-grid {
+  display: grid;
+  gap: 14px;
+}
+.selling-point,
+.plan-card {
+  padding: 18px;
+  border-radius: 16px;
+  background: #f8f6f4;
+}
+.selling-point {
+  display: grid;
+  gap: 14px;
+}
+.plan-grid {
+  grid-template-columns: repeat(2, 1fr);
+}
+.plan-card {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+.plan-card > strong {
+  color: #b9463a;
+}
 @media (max-width: 780px) {
   .workspace,
   .form-page {
@@ -439,6 +510,18 @@ textarea:focus {
     align-items: flex-start;
   }
   .field-grid {
+    grid-template-columns: 1fr;
+  }
+  .analysis-cta,
+  .analysis-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .analysis-cta-actions {
+    width: 100%;
+    align-items: flex-start;
+  }
+  .plan-grid {
     grid-template-columns: 1fr;
   }
   .account {

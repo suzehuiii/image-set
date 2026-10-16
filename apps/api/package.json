@@ -11,6 +11,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@image-set/ai-provider": "workspace:*",
     "@image-set/database": "workspace:*",
     "@image-set/shared": "workspace:*",
     "@nestjs/common": "^11.1.9",
@@ -24,7 +25,8 @@
     "ioredis": "^5.8.2",
     "minio": "^8.0.6",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.2"
+    "rxjs": "^7.8.2",
+    "sharp": "^0.35.5"
   },
   "devDependencies": {
     "@types/express": "^5.0.5",

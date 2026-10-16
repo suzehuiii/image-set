@@ -86,6 +86,57 @@ export async function migrateDatabase(pool: Pool): Promise<void> {
       `);
       await client.query('insert into schema_migrations(version) values (1)');
     }
+    const versionTwo = await client.query<{ version: number }>(
+      'select version from schema_migrations where version = 2',
+    );
+    if (versionTwo.rowCount === 0) {
+      await client.query(`
+        create table generation_jobs (
+          id uuid primary key,
+          project_id uuid not null references projects(id) on delete cascade,
+          user_id uuid not null references users(id) on delete cascade,
+          job_type varchar(20) not null check (job_type in ('analysis', 'image', 'review', 'export')),
+          image_role varchar(20) check (image_role in ('main', 'feature', 'lifestyle', 'detail')),
+          status varchar(20) not null check (status in ('queued', 'running', 'succeeded', 'failed', 'cancelled')),
+          provider varchar(40) not null,
+          model varchar(100) not null,
+          prompt_version varchar(40) not null,
+          idempotency_key varchar(120) not null,
+          input_snapshot jsonb not null default '{}'::jsonb,
+          result_asset_id uuid references assets(id) on delete set null,
+          credits_reserved integer not null default 0 check (credits_reserved >= 0),
+          attempt_count integer not null default 0 check (attempt_count >= 0),
+          error_code varchar(80),
+          error_message_safe varchar(500),
+          started_at timestamptz,
+          completed_at timestamptz,
+          created_at timestamptz not null default now(),
+          unique(user_id, idempotency_key)
+        );
+        create index generation_jobs_project_created_idx on generation_jobs(project_id, created_at desc);
+        create index generation_jobs_status_idx on generation_jobs(status, created_at);
+
+        create table credit_ledger (
+          id uuid primary key,
+          user_id uuid not null references users(id) on delete cascade,
+          job_id uuid references generation_jobs(id) on delete set null,
+          entry_type varchar(20) not null check (entry_type in ('grant', 'reserve', 'consume', 'refund', 'adjustment')),
+          delta integer not null,
+          balance_after integer not null check (balance_after >= 0),
+          idempotency_key varchar(180) not null unique,
+          description varchar(255) not null,
+          created_at timestamptz not null default now()
+        );
+        create index credit_ledger_user_created_idx on credit_ledger(user_id, created_at desc);
+
+        insert into credit_ledger(id, user_id, entry_type, delta, balance_after, idempotency_key, description)
+        select md5(id::text || ':initial-grant')::uuid, id, 'grant', credit_balance, credit_balance,
+               'registration-grant:' || id::text, '首次注册赠送'
+        from users
+        on conflict (idempotency_key) do nothing;
+      `);
+      await client.query('insert into schema_migrations(version) values (2)');
+    }
     await client.query('commit');
   } catch (error) {
     await client.query('rollback');

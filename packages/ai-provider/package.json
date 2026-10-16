@@ -14,5 +14,10 @@
     "build": "tsc -p tsconfig.json",
     "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@image-set/shared": "workspace:*",
+    "openai": "^7.34.0",
+    "zod": "^4.1.12"
   }
 }

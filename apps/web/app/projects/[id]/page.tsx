@@ -3,22 +3,36 @@
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { type ChangeEvent, useCallback, useEffect, useState } from 'react';
-import { api, type Asset, type Project } from '../../lib/api';
+import {
+  api,
+  type Asset,
+  type ProductAnalysisResult,
+  type Project,
+  type User,
+} from '../../lib/api';
+import { AnalysisEditor } from './analysis-editor';
 
 export default function ProjectPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [project, setProject] = useState<Project>();
+  const [user, setUser] = useState<User>();
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [analysis, setAnalysis] = useState<ProductAnalysisResult>();
   const [error, setError] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [analysisPending, setAnalysisPending] = useState(false);
+  const [notice, setNotice] = useState('');
   const load = useCallback(async () => {
-    const [details, list] = await Promise.all([
+    const [details, list, me] = await Promise.all([
       api<Project>(`/projects/${id}`),
       api<{ items: Asset[] }>(`/projects/${id}/assets`),
+      api<{ user: User }>('/auth/me'),
     ]);
     setProject(details);
     setAssets(list.items);
+    setUser(me.user);
+    setAnalysis(details.analysisResult ?? undefined);
   }, [id]);
   useEffect(() => {
     load().catch((caught: unknown) =>
@@ -60,6 +74,60 @@ export default function ProjectPage() {
     await api(`/projects/${id}`, { method: 'DELETE' });
     router.push('/');
   }
+  async function analyzeProduct() {
+    if (!assets.some((asset) => asset.assetType === 'product')) {
+      setError('请先上传至少一张商品实拍图');
+      return;
+    }
+    setAnalysisPending(true);
+    setError('');
+    setNotice('');
+    try {
+      const result = await api<{
+        analysis: ProductAnalysisResult;
+        creditBalance: number;
+      }>(`/projects/${id}/analyze`, {
+        method: 'POST',
+        headers: { 'Idempotency-Key': crypto.randomUUID() },
+      });
+      setAnalysis(result.analysis);
+      setProject((current) =>
+        current
+          ? { ...current, analysisResult: result.analysis, status: 'ready' }
+          : current,
+      );
+      setUser((current) =>
+        current ? { ...current, creditBalance: result.creditBalance } : current,
+      );
+      setNotice('分析完成，结果已保存。');
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : '商品分析失败');
+      await load().catch(() => undefined);
+    } finally {
+      setAnalysisPending(false);
+    }
+  }
+  async function saveAnalysis() {
+    if (!analysis) return;
+    setAnalysisPending(true);
+    setError('');
+    setNotice('');
+    try {
+      const result = await api<{ analysis: ProductAnalysisResult }>(
+        `/projects/${id}/content`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ analysis }),
+        },
+      );
+      setAnalysis(result.analysis);
+      setNotice('修改已保存；本次未扣额度。');
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : '保存失败');
+    } finally {
+      setAnalysisPending(false);
+    }
+  }
   if (!project && !error)
     return <main className="centered">正在载入项目…</main>;
   return (
@@ -80,6 +148,7 @@ export default function ProjectPage() {
         </button>
       </header>
       {error && <p className="error banner">{error}</p>}
+      {notice && <p className="success banner">{notice}</p>}
       <section className="upload-columns">
         <UploadGroup
           title="商品实拍图"
@@ -100,11 +169,33 @@ export default function ProjectPage() {
           onRemove={remove}
         />
       </section>
-      <section className="next-step">
-        <p className="eyebrow">NEXT STEP</p>
-        <h2>商品分析将在 M2 开放</h2>
-        <p>素材已安全保存；刷新或重新登录后仍可恢复。</p>
-      </section>
+      {analysis ? (
+        <AnalysisEditor
+          value={analysis}
+          disabled={analysisPending}
+          onChange={setAnalysis}
+          onSave={saveAnalysis}
+          onReanalyze={analyzeProduct}
+        />
+      ) : (
+        <section className="next-step analysis-cta">
+          <div>
+            <p className="eyebrow">AI PRODUCT ANALYSIS</p>
+            <h2>生成双语商品信息与四图规划</h2>
+            <p>基于商品图与已填资料分析；成功消耗 1 额度，失败自动退款。</p>
+          </div>
+          <div className="analysis-cta-actions">
+            <span>当前余额 {user?.creditBalance ?? '—'}</span>
+            <button
+              className="primary"
+              disabled={analysisPending}
+              onClick={analyzeProduct}
+            >
+              {analysisPending ? '正在分析图片…' : '开始分析 · 1 额度'}
+            </button>
+          </div>
+        </section>
+      )}
     </main>
   );
 }

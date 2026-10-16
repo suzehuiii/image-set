@@ -19,6 +19,8 @@ import { imageSize } from 'image-size';
 import { Client as MinioClient } from 'minio';
 import type { Response } from 'express';
 import { createHash, randomUUID } from 'node:crypto';
+import sharp from 'sharp';
+import type { ProductAnalysisAsset } from '@image-set/ai-provider';
 
 import { AuthGuard, CurrentUser, type AuthUser } from './auth.js';
 import { DatabaseService } from './database.service.js';
@@ -203,6 +205,53 @@ export class AssetsService {
     const asset = result.rows[0];
     if (!asset) throw new NotFoundException('素材不存在');
     return this.storage.presignedGetObject(this.bucket, asset.objectKey, 300);
+  }
+
+  async productAnalysisInputs(
+    userId: string,
+    projectId: string,
+  ): Promise<ProductAnalysisAsset[]> {
+    const result = await this.database.client.pool.query<{
+      objectKey: string;
+    }>(
+      `select object_key as "objectKey"
+       from assets
+       where project_id = $1 and owner_user_id = $2 and asset_type = 'product'
+         and status = 'ready' and deleted_at is null
+       order by created_at`,
+      [projectId, userId],
+    );
+    return Promise.all(
+      result.rows.map(async (asset) => {
+        const stream = await this.storage.getObject(
+          this.bucket,
+          asset.objectKey,
+        );
+        const chunks: Buffer[] = [];
+        for await (const chunk of stream) {
+          const value: unknown = chunk;
+          if (Buffer.isBuffer(value)) chunks.push(value);
+          else if (typeof value === 'string') chunks.push(Buffer.from(value));
+          else if (value instanceof Uint8Array) chunks.push(Buffer.from(value));
+          else throw new Error('对象存储返回了无法识别的数据');
+        }
+        const analysisImage = await sharp(Buffer.concat(chunks))
+          .rotate()
+          .flatten({ background: '#ffffff' })
+          .resize({
+            width: 2048,
+            height: 2048,
+            fit: 'inside',
+            withoutEnlargement: true,
+          })
+          .jpeg({ quality: 85, chromaSubsampling: '4:4:4' })
+          .toBuffer();
+        return {
+          mimeType: 'image/jpeg' as const,
+          base64Data: analysisImage.toString('base64'),
+        };
+      }),
+    );
   }
 }
 

@@ -5,6 +5,7 @@ packages:
 allowBuilds:
   esbuild: true
   msgpackr-extract: true
+  sharp: true
 
 onlyBuiltDependencies:
   - argon2

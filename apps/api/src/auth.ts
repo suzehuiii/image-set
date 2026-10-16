@@ -112,6 +112,11 @@ export class AuthService {
       );
       const user = created.rows[0];
       if (!user) throw new Error('User creation returned no row');
+      await client.query(
+        `insert into credit_ledger(id, user_id, entry_type, delta, balance_after, idempotency_key, description)
+         values ($1, $2, 'grant', 50, 50, $3, '首次注册赠送')`,
+        [randomUUID(), user.id, `registration-grant:${user.id}`],
+      );
       const token = await this.createSession(user.id, client);
       await client.query('commit');
       return { user, token };

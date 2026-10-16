@@ -88,3 +88,67 @@ export const assets = pgTable(
     index('assets_owner_project_idx').on(table.ownerUserId, table.projectId),
   ],
 );
+
+export const generationJobs = pgTable(
+  'generation_jobs',
+  {
+    id: uuid().primaryKey(),
+    projectId: uuid('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    jobType: varchar('job_type', { length: 20 }).notNull(),
+    imageRole: varchar('image_role', { length: 20 }),
+    status: varchar({ length: 20 }).notNull(),
+    provider: varchar({ length: 40 }).notNull(),
+    model: varchar({ length: 100 }).notNull(),
+    promptVersion: varchar('prompt_version', { length: 40 }).notNull(),
+    idempotencyKey: varchar('idempotency_key', { length: 120 }).notNull(),
+    inputSnapshot: jsonb('input_snapshot').notNull(),
+    resultAssetId: uuid('result_asset_id').references(() => assets.id, {
+      onDelete: 'set null',
+    }),
+    creditsReserved: integer('credits_reserved').notNull().default(0),
+    attemptCount: integer('attempt_count').notNull().default(0),
+    errorCode: varchar('error_code', { length: 80 }),
+    errorMessageSafe: varchar('error_message_safe', { length: 500 }),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    uniqueIndex('generation_jobs_user_idempotency_idx').on(
+      table.userId,
+      table.idempotencyKey,
+    ),
+    index('generation_jobs_project_created_idx').on(
+      table.projectId,
+      table.createdAt,
+    ),
+  ],
+);
+
+export const creditLedger = pgTable(
+  'credit_ledger',
+  {
+    id: uuid().primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    jobId: uuid('job_id').references(() => generationJobs.id, {
+      onDelete: 'set null',
+    }),
+    entryType: varchar('entry_type', { length: 20 }).notNull(),
+    delta: integer().notNull(),
+    balanceAfter: integer('balance_after').notNull(),
+    idempotencyKey: varchar('idempotency_key', { length: 180 }).notNull(),
+    description: varchar({ length: 255 }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    uniqueIndex('credit_ledger_idempotency_idx').on(table.idempotencyKey),
+    index('credit_ledger_user_created_idx').on(table.userId, table.createdAt),
+  ],
+);

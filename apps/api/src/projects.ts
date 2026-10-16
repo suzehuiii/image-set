@@ -71,6 +71,7 @@ type ProjectRow = {
   targetLocale: string;
   productCategory: string | null;
   productBrief: Record<string, unknown>;
+  analysisResult: Record<string, unknown> | null;
   status: string;
   assetCount: number;
   createdAt: Date;
@@ -86,7 +87,8 @@ export class ProjectsService {
       `insert into projects(id, user_id, name, target_platform, target_locale, product_category, product_brief)
        values ($1, $2, $3, $4, 'en-US', $5, $6)
        returning id, name, target_platform as "targetPlatform", target_locale as "targetLocale",
-                 product_category as "productCategory", product_brief as "productBrief", status,
+                 product_category as "productCategory", product_brief as "productBrief",
+                 analysis_result as "analysisResult", status,
                  0::int as "assetCount", created_at as "createdAt", updated_at as "updatedAt"`,
       [
         randomUUID(),
@@ -105,7 +107,8 @@ export class ProjectsService {
     const [items, count] = await Promise.all([
       this.database.client.pool.query<ProjectRow>(
         `select p.id, p.name, p.target_platform as "targetPlatform", p.target_locale as "targetLocale",
-                p.product_category as "productCategory", p.product_brief as "productBrief", p.status,
+                p.product_category as "productCategory", p.product_brief as "productBrief",
+                p.analysis_result as "analysisResult", p.status,
                 count(a.id)::int as "assetCount", p.created_at as "createdAt", p.updated_at as "updatedAt"
          from projects p left join assets a on a.project_id = p.id and a.deleted_at is null
          where p.user_id = $1 and p.deleted_at is null
@@ -128,7 +131,8 @@ export class ProjectsService {
   async findOwned(userId: string, projectId: string): Promise<ProjectRow> {
     const result = await this.database.client.pool.query<ProjectRow>(
       `select p.id, p.name, p.target_platform as "targetPlatform", p.target_locale as "targetLocale",
-              p.product_category as "productCategory", p.product_brief as "productBrief", p.status,
+              p.product_category as "productCategory", p.product_brief as "productBrief",
+              p.analysis_result as "analysisResult", p.status,
               count(a.id)::int as "assetCount", p.created_at as "createdAt", p.updated_at as "updatedAt"
        from projects p left join assets a on a.project_id = p.id and a.deleted_at is null
        where p.id = $1 and p.user_id = $2 and p.deleted_at is null group by p.id`,

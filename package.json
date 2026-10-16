@@ -18,7 +18,7 @@
     "healthcheck": "node scripts/healthcheck.mjs",
     "lint": "eslint . --max-warnings=0",
     "packages:build": "pnpm --filter \"./packages/**\" build",
-    "test": "cross-env TEMP=.tmp TMP=.tmp vitest run",
+    "test": "pnpm packages:build && cross-env TEMP=.tmp TMP=.tmp vitest run",
     "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {

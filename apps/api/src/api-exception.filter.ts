@@ -20,14 +20,20 @@ export class ApiExceptionFilter implements ExceptionFilter {
         : HttpStatus.INTERNAL_SERVER_ERROR;
     const body =
       exception instanceof HttpException ? exception.getResponse() : null;
+    const exceptionBody =
+      typeof body === 'object' && body ? (body as Record<string, unknown>) : {};
     const rawMessage =
       typeof body === 'object' && body && 'message' in body
         ? (body as { message: string | string[] }).message
         : 'Internal server error';
     response.status(status).json({
-      code: `HTTP_${status}`,
+      code:
+        typeof exceptionBody.code === 'string'
+          ? exceptionBody.code
+          : `HTTP_${status}`,
       message: Array.isArray(rawMessage) ? rawMessage.join('; ') : rawMessage,
       requestId: request.header('x-request-id') ?? randomUUID(),
+      ...(exceptionBody.details ? { details: exceptionBody.details } : {}),
     });
   }
 }

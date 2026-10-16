@@ -46,7 +46,7 @@ export default function HomePage() {
       <section className="section-head">
         <div>
           <h2>最近项目</h2>
-          <p>创建项目并上传真实商品图，AI 分析将在 M2 接入。</p>
+          <p>上传真实商品图，生成可编辑的双语商品信息与四图规划。</p>
         </div>
         <Link className="primary link-button" href="/projects/new">
           创建项目
