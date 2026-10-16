@@ -30,21 +30,21 @@ export function getDefaultLayout(role: ImageRole): ImageLayout {
 
 const PLATFORM_RULES: Record<string, string> = {
   amazon_us:
-    'Amazon US: for the main image use a pure white (#FFFFFF) background, show only the declared product or set, keep the whole product visible, and do not add props, borders, badges, watermarks, or text.',
+    'Amazon US：主图必须使用纯白色（#FFFFFF）背景，只展示已确认的商品或套装，完整呈现商品，不得添加道具、边框、徽章、水印或文字。',
   shopify:
-    'Shopify storefront: keep the product dominant, the composition clean, and all depicted uses truthful to the supplied product facts.',
+    'Shopify 店铺：商品必须是画面主体，构图保持简洁，画面展示的所有用途都必须符合已提供的商品事实。',
   tiktok_shop:
-    'TikTok Shop: use a clear mobile-first composition with the product immediately recognizable and no unsupported performance or certification claims.',
+    'TikTok Shop：采用清晰、移动端优先的构图，让商品可以被立即识别，不得出现缺乏依据的性能或认证声明。',
 };
 
 const ROLE_DIRECTIONS: Record<ImageRole, string> = {
-  main: 'Create a clean catalog hero image on a pure white background. No text, graphics, props, hands, packaging additions, or decorative scenery.',
+  main: '生成干净的纯白背景商品主图。不得出现文字、图形、道具、手、额外包装或装饰性场景。',
   feature:
-    'Create a visual that demonstrates exactly one verified product benefit. Leave intentional negative space for copy that will be added later by the layout system.',
+    '画面只演示一个经过验证的商品卖点，并主动留出负空间，供排版系统后续添加文案。',
   lifestyle:
-    'Place the product in a realistic, scale-consistent use context supported by the product facts. Do not imply unverified uses or performance.',
+    '把商品放入符合商品事实、真实且比例合理的使用场景，不得暗示未经验证的用途或性能。',
   detail:
-    'Create a precise close-up emphasizing a real material, surface, interface, or construction detail visible in the references. Do not invent internal parts.',
+    '生成准确的局部特写，突出参考图中真实可见的材质、表面、接口或结构细节，不得虚构内部零件。',
 };
 
 export type ImagePromptInput = {
@@ -60,24 +60,24 @@ export function buildImagePrompt(input: ImagePromptInput): string {
   const plan = input.analysis.imagePlan.find(
     (item) => item.role === input.role,
   );
-  if (!plan) throw new Error(`Missing image plan for role: ${input.role}`);
+  if (!plan) throw new Error(`缺少 ${input.role} 对应的图片方案`);
   const productFacts = input.analysis.sellingPoints
-    .map((point) => `${point.en} (evidence: ${point.evidence})`)
+    .map((point) => `${point.zh || point.en}（证据：${point.evidence}）`)
     .join('; ');
   return [
-    'Create one square ecommerce product image using the supplied images as visual references.',
-    `The first ${input.productReferenceCount} image(s) are authoritative product references. Preserve the exact product identity: color, geometry, proportions, material appearance, logo and markings, quantity, included parts, and accessories.`,
+    '请使用提供的图片作为视觉参考，生成一张正方形电商商品图。',
+    `前 ${input.productReferenceCount} 张图片是真实商品的权威参考。必须准确保持商品身份，包括颜色、几何形状、比例、材质外观、Logo 与标记、数量、组成部件和配件。`,
     input.styleReferenceCount > 0
-      ? `The final ${input.styleReferenceCount} image(s) are style references only. Never copy or replace their products.`
-      : 'No separate style reference is supplied; use a restrained premium ecommerce photography style.',
+      ? `最后 ${input.styleReferenceCount} 张图片仅用于参考视觉风格，绝不能复制其中的商品，也不能用其中的商品替换真实商品。`
+      : '没有单独提供风格参考图，请采用克制、高级的电商摄影风格。',
     ROLE_DIRECTIONS[input.role],
     PLATFORM_RULES[input.targetPlatform] ?? PLATFORM_RULES.shopify,
-    `Planned objective: ${plan.objective}`,
-    `Visual direction: ${plan.visualDirection}`,
-    `Verified product facts: ${productFacts || 'Use only visibly verifiable details from the product references.'}`,
-    `Output locale context: ${input.targetLocale}.`,
-    'Generate the visual without any words, letters, numbers, labels, callouts, badges, watermarks, or UI. Marketing copy is added later by deterministic templates.',
-    'Do not invent functions, dimensions, materials, certifications, accessories, packaging, or claims. When uncertain, preserve the reference product and simplify the surrounding scene.',
+    `策划目标：${plan.objective}`,
+    `视觉方向：${plan.visualDirection}`,
+    `已验证的商品事实：${productFacts || '只能使用商品参考图中肉眼可验证的细节。'}`,
+    `输出地区语境：${input.targetLocale}。`,
+    '画面中不得生成任何单词、字母、数字、标签、标注、徽章、水印或界面元素。营销文案将由确定性模板在后续添加。',
+    '不得虚构功能、尺寸、材质、认证、配件、包装或营销声明。如有不确定之处，应保持参考商品原貌并简化周围场景。',
   ].join('\n');
 }
 

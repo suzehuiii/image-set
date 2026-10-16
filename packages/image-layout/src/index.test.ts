@@ -48,9 +48,9 @@ describe('default image layout', () => {
       styleReferenceCount: 1,
       analysis,
     });
-    expect(prompt).toContain('pure white (#FFFFFF)');
-    expect(prompt).toContain('first 2 image(s)');
-    expect(prompt).toContain('without any words');
+    expect(prompt).toContain('纯白色（#FFFFFF）背景');
+    expect(prompt).toContain('前 2 张图片');
+    expect(prompt).toContain('不得生成任何单词、字母、数字');
   });
 
   it('uses saved English plan copy and never returns copy for the main image', () => {

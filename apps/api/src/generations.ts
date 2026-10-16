@@ -27,7 +27,7 @@ import { AuthGuard, CurrentUser, type AuthUser } from './auth.js';
 import { DatabaseService } from './database.service.js';
 
 const IMAGE_CREDITS = 3;
-const PROMPT_VERSION = 'ecommerce-image-v1';
+const PROMPT_VERSION = 'ecommerce-image-zh-v2';
 
 type GenerationJobRow = {
   id: string;

@@ -89,6 +89,11 @@ describe('OpenAiProvider', () => {
       model: 'gpt-6.1-sol',
       store: false,
     });
+    const serializedRequest = JSON.stringify(parse.mock.calls[0]?.[0]);
+    expect(serializedRequest).toContain(
+      '你负责为中国跨境卖家分析真实的电商商品照片',
+    );
+    expect(serializedRequest).toContain('请分析这个面向 amazon_us');
   });
 
   it('maps empty structured output to a safe provider error', async () => {
@@ -161,5 +166,10 @@ describe('OpenAiProvider', () => {
     });
     expect(result.status).toBe('passed');
     expect(parse.mock.calls[0]?.[0]).toMatchObject({ model: 'gpt-6-luna' });
+    const serializedRequest = JSON.stringify(parse.mock.calls[0]?.[0]);
+    expect(serializedRequest).toContain('你是一名严格的电商商品一致性审核员');
+    expect(serializedRequest).toContain(
+      '请将生成的 main 图片与真实商品参考图进行一致性审核',
+    );
   });
 });
