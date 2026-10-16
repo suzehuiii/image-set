@@ -135,7 +135,7 @@ export function GenerationPanel({
   }
 
   return (
-    <section className="generation-section">
+    <section className="generation-section" aria-busy={active}>
       <div className="section-head generation-heading">
         <div>
           <p className="eyebrow">FOUR-IMAGE SET</p>
@@ -145,6 +145,7 @@ export function GenerationPanel({
         <div className="generation-actions">
           <span>当前余额 {creditBalance}</span>
           <button
+            type="button"
             className="primary"
             disabled={pending || active || creditBalance < 12}
             onClick={() => create()}
@@ -153,6 +154,7 @@ export function GenerationPanel({
           </button>
           <div className="zip-actions">
             <button
+              type="button"
               className="ghost"
               disabled={!completeSet || Boolean(exporting)}
               onClick={() => exportImages('png')}
@@ -160,6 +162,7 @@ export function GenerationPanel({
               {exporting === 'set-png' ? '打包中…' : 'PNG 整套 ZIP'}
             </button>
             <button
+              type="button"
               className="ghost"
               disabled={!completeSet || Boolean(exporting)}
               onClick={() => exportImages('jpg')}
@@ -169,8 +172,16 @@ export function GenerationPanel({
           </div>
         </div>
       </div>
-      {error && <p className="error banner">{error}</p>}
-      {notice && <p className="success banner">{notice}</p>}
+      {error && (
+        <p className="error banner" role="alert">
+          {error}
+        </p>
+      )}
+      {notice && (
+        <p className="success banner" role="status">
+          {notice}
+        </p>
+      )}
       <div className="generation-grid">
         {IMAGE_ROLES.map((role) => {
           const roleJobs = imageJobs.filter((job) => job.imageRole === role);
@@ -202,7 +213,14 @@ export function GenerationPanel({
                 {latest &&
                   (latest.status === 'queued' ||
                     latest.status === 'running') && (
-                    <div className="generation-progress">
+                    <div
+                      className="generation-progress"
+                      role="progressbar"
+                      aria-label={`${ROLE_LABELS[role]}生成进度`}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={latest.progress}
+                    >
                       <strong>{latest.progress}%</strong>
                       <span>{STAGE_LABELS[latest.stage] ?? latest.stage}</span>
                     </div>
@@ -256,6 +274,7 @@ export function GenerationPanel({
                 <div className="generation-card-actions">
                   {latest?.status === 'failed' ? (
                     <button
+                      type="button"
                       className="ghost"
                       disabled={pending || creditBalance < 3}
                       onClick={() => retry(latest.id)}
@@ -264,6 +283,7 @@ export function GenerationPanel({
                     </button>
                   ) : (
                     <button
+                      type="button"
                       className="ghost"
                       disabled={pending || active || creditBalance < 3}
                       onClick={() => create(role)}
@@ -275,6 +295,7 @@ export function GenerationPanel({
                 {result && (
                   <div className="download-actions">
                     <button
+                      type="button"
                       className="ghost"
                       disabled={Boolean(exporting)}
                       onClick={() => exportImages('png', role)}
@@ -284,6 +305,7 @@ export function GenerationPanel({
                         : '合成并下载 PNG'}
                     </button>
                     <button
+                      type="button"
                       className="ghost"
                       disabled={Boolean(exporting)}
                       onClick={() => exportImages('jpg', role)}

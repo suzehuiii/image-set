@@ -1,4 +1,5 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, type NestModule } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 
 import { AiProviderService } from './ai-provider.service.js';
 import { AnalysisController, AnalysisService } from './analysis.js';
@@ -15,6 +16,7 @@ import {
   GenerationQueueService,
 } from './generations.js';
 import { ProjectsController, ProjectsService } from './projects.js';
+import { RateLimitGuard, RequestContextMiddleware } from './operational.js';
 
 @Module({
   controllers: [
@@ -40,6 +42,13 @@ import { ProjectsController, ProjectsService } from './projects.js';
     GenerationsService,
     ExportsService,
     CreditsService,
+    RequestContextMiddleware,
+    RateLimitGuard,
+    { provide: APP_GUARD, useExisting: RateLimitGuard },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(RequestContextMiddleware).forRoutes('*');
+  }
+}

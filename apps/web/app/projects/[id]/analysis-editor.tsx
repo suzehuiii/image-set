@@ -44,10 +44,20 @@ export function AnalysisEditor({
           <p>所有内容都可编辑；保存文字不会扣费。</p>
         </div>
         <div className="action-row">
-          <button className="ghost" disabled={disabled} onClick={onReanalyze}>
+          <button
+            type="button"
+            className="ghost"
+            disabled={disabled}
+            onClick={onReanalyze}
+          >
             重新分析 · 1 额度
           </button>
-          <button className="primary" disabled={disabled} onClick={onSave}>
+          <button
+            type="button"
+            className="primary"
+            disabled={disabled}
+            onClick={onSave}
+          >
             {disabled ? '处理中…' : '保存修改'}
           </button>
         </div>

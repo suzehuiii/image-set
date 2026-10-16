@@ -5,15 +5,17 @@ import {
   HttpStatus,
   type ExceptionFilter,
 } from '@nestjs/common';
-import type { Request, Response } from 'express';
+import type { Response } from 'express';
 import { randomUUID } from 'node:crypto';
+
+import type { OperationalRequest } from './operational.js';
 
 @Catch()
 export class ApiExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost): void {
     const context = host.switchToHttp();
     const response = context.getResponse<Response>();
-    const request = context.getRequest<Request>();
+    const request = context.getRequest<OperationalRequest>();
     const status =
       exception instanceof HttpException
         ? exception.getStatus()
@@ -32,7 +34,7 @@ export class ApiExceptionFilter implements ExceptionFilter {
           ? exceptionBody.code
           : `HTTP_${status}`,
       message: Array.isArray(rawMessage) ? rawMessage.join('; ') : rawMessage,
-      requestId: request.header('x-request-id') ?? randomUUID(),
+      requestId: request.requestId ?? randomUUID(),
       ...(exceptionBody.details ? { details: exceptionBody.details } : {}),
     });
   }

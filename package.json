@@ -11,6 +11,7 @@
   "scripts": {
     "build": "pnpm packages:build && pnpm --filter \"./apps/**\" build",
     "clean": "pnpm -r run clean",
+    "compose:production:check": "node scripts/validate-production-compose.mjs",
     "dev": "pnpm packages:build && pnpm --parallel --filter \"./apps/**\" dev",
     "dev:infra": "docker compose up -d postgres redis minio",
     "format": "prettier --write .",
@@ -18,6 +19,7 @@
     "healthcheck": "node scripts/healthcheck.mjs",
     "lint": "eslint . --max-warnings=0",
     "packages:build": "pnpm --filter \"./packages/**\" build",
+    "smoke:production": "node scripts/smoke-production.mjs",
     "test": "pnpm packages:build && cross-env TEMP=.tmp TMP=.tmp vitest run",
     "typecheck": "pnpm -r typecheck"
   },

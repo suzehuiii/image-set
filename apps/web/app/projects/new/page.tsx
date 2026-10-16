@@ -88,8 +88,12 @@ export default function NewProjectPage() {
             <input name="requirements" />
           </label>
         </div>
-        {error && <p className="error">{error}</p>}
-        <button className="primary" disabled={pending}>
+        {error && (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        )}
+        <button type="submit" className="primary" disabled={pending}>
           {pending ? '创建中…' : '创建并上传素材'}
         </button>
       </form>

@@ -19,6 +19,20 @@ body {
   margin: 0;
   min-height: 100vh;
 }
+.skip-link {
+  position: fixed;
+  z-index: 1000;
+  top: 12px;
+  left: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  color: #fff;
+  background: #241f1d;
+  transform: translateY(-160%);
+}
+.skip-link:focus {
+  transform: translateY(0);
+}
 main {
   width: min(1080px, calc(100% - 40px));
   margin: 0 auto;
@@ -179,13 +193,22 @@ button,
   font-weight: 750;
 }
 .primary {
-  background: #d65e50;
+  background: #b9473a;
   color: white;
   box-shadow: 0 8px 20px #d65e5030;
 }
 .primary:disabled {
   opacity: 0.55;
   cursor: wait;
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+.link-button:focus-visible {
+  outline: 3px solid #225ea8;
+  outline-offset: 3px;
 }
 .ghost {
   background: white;
@@ -219,6 +242,9 @@ button,
 .project-card:hover {
   border-color: #d65e50;
   transform: translateY(-2px);
+}
+.project-card:focus-visible {
+  border-color: #b9473a;
 }
 .project-thumb {
   display: grid;
@@ -700,5 +726,30 @@ textarea:focus {
     width: 100%;
     flex-direction: row;
     align-items: center;
+  }
+  .action-row,
+  .generation-card-actions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .primary,
+  .ghost,
+  .danger,
+  .link-button {
+    min-height: 44px;
+  }
+  .download-actions {
+    flex-direction: column;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
   }
 }

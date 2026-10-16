@@ -134,7 +134,11 @@ export default function ProjectPage() {
     }
   }
   if (!project && !error)
-    return <main className="centered">正在载入项目…</main>;
+    return (
+      <main className="centered" aria-live="polite" aria-busy="true">
+        正在载入项目…
+      </main>
+    );
   return (
     <main className="workspace">
       <header className="topbar">
@@ -148,12 +152,20 @@ export default function ProjectPage() {
             {project?.targetPlatform.replace('_', ' ')}
           </p>
         </div>
-        <button className="danger" onClick={removeProject}>
+        <button type="button" className="danger" onClick={removeProject}>
           删除项目
         </button>
       </header>
-      {error && <p className="error banner">{error}</p>}
-      {notice && <p className="success banner">{notice}</p>}
+      {error && (
+        <p className="error banner" role="alert">
+          {error}
+        </p>
+      )}
+      {notice && (
+        <p className="success banner" role="status">
+          {notice}
+        </p>
+      )}
       <section className="upload-columns">
         <UploadGroup
           title="商品实拍图"
@@ -202,6 +214,7 @@ export default function ProjectPage() {
           <div className="analysis-cta-actions">
             <span>当前余额 {user?.creditBalance ?? '—'}</span>
             <button
+              type="button"
               className="primary"
               disabled={analysisPending}
               onClick={analyzeProduct}
@@ -269,7 +282,9 @@ function UploadGroup({
                 {(asset.fileSize / 1024 / 1024).toFixed(1)} MB
               </small>
               <button
+                type="button"
                 className="text-danger"
+                aria-label={`删除 ${asset.originalName}`}
                 onClick={() => onRemove(asset.id)}
               >
                 删除

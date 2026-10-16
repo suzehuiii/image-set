@@ -74,7 +74,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' }) {
             {error}
           </p>
         )}
-        <button className="primary" disabled={pending}>
+        <button type="submit" className="primary" disabled={pending}>
           {pending ? '请稍候…' : registering ? '注册并开始' : '登录'}
         </button>
         <p className="switch">

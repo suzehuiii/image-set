@@ -1,6 +1,6 @@
 # 商品套图 AI
 
-面向跨境电商卖家的 AI 商品信息分析与电商套图生成工具。当前已完成 M4 功能实现，具备邮箱账号、项目与私有素材管理、OpenAI 商品视觉分析、异步四图生成、一致性检查、单图重生成、确定性文字模板、PNG/JPG 单图下载、整套 ZIP 导出和事务化额度流水。
+面向跨境电商卖家的 AI 商品信息分析与电商套图生成工具。当前已完成 M0–M4 功能，并已启动 M5 生产准备：具备邮箱账号、项目与私有素材管理、OpenAI 商品视觉分析、异步四图生成、一致性检查、单图重生成、确定性文字模板、PNG/JPG/ZIP 导出、事务化额度流水，以及生产配置校验、敏感接口限流、结构化访问日志和 TLS 部署基线。
 
 项目需求、技术架构、决策记录、实施进度和会话交接信息统一维护在 [项目主文档](docs/PROJECT_CONTEXT.md)。开始任何开发工作前，请先完整阅读该文档和根目录的 `AGENTS.md`。
 
@@ -87,6 +87,7 @@ pnpm typecheck
 pnpm test
 pnpm build
 docker compose config --quiet
+pnpm compose:production:check
 ```
 
 GitHub Actions 会对 push 到 `main` 和所有 Pull Request 执行同一组检查。
@@ -109,6 +110,20 @@ infra/
 scripts/               本地验证脚本
 docs/                  项目单一事实源
 ```
+
+## M5 私有测试部署
+
+生产编排与本地 Compose 分离。`docker-compose.production.yml` 只运行 Web、API、Worker 和 Nginx，要求使用外部 PostgreSQL、Redis、受维护的 S3 兼容存储与真实 TLS 证书；它不会把 API、Worker 或依赖服务端口发布到公网。
+
+完整的配置契约、部署、冒烟、日志监控、备份恢复和回滚步骤见 [M5 部署与运维文档](docs/DEPLOYMENT.md)。配置模板为 `.env.production.example`，真实生产配置必须保存在仓库外。
+
+```bash
+pnpm compose:production:check
+docker compose --env-file /secure/path/image-set.env -f docker-compose.production.yml up --build -d
+BASE_URL=https://studio.example.com pnpm smoke:production
+```
+
+API 为每个请求生成或传递 `x-request-id`，并输出不含查询参数、Cookie、请求体和 Prompt 的 JSON 访问日志。登录注册、上传、分析和图片生成/重试按来源 IP 使用 Redis 原子限流；生产环境若缺少安全 Cookie、HTTPS Origin/对象存储端点或必填密钥，API 会拒绝启动。
 
 ## M4 使用流程
 
@@ -157,6 +172,6 @@ GET  /api/assets/:id/download        # 鉴权后使用原文件名下载单图�
 
 ## 当前实现边界
 
-M4 已完成固定模板、免费重新合成、PNG/JPG 单图和整套 ZIP 导出。当前仓库未配置真实 OpenAI 密钥，因此已验证 Provider 请求构造、Prompt、Schema、队列进度、三次临时错误退避、四任务独立退款和余额恢复；真实图片成功响应、视觉质量、延迟和模型费用仍需在提供测试密钥后联调。M2 商品分析仍是同步 API 请求，进程强制终止补偿和僵尸任务扫描将在生产准备阶段补齐。导出当前为 API 内同步内存处理，适合 MVP 固定四张 2048×2048 图片；未来扩展批量 SKU 时需迁移到流式或异步导出。
+M5 当前完成的是可在仓库内验证的生产准备初始化，不等于已经通过真实服务器交付验收。仓库仍未配置真实 OpenAI 密钥，因此已验证 Provider 请求构造、Prompt、Schema、队列进度、三次临时错误退避、四任务独立退款和余额恢复；真实图片成功响应、视觉质量、延迟和模型费用仍需在提供测试密钥后联调。分析同步调用的僵尸任务补偿、Redis 丢失后的 queued 任务重投、软删除对象清理和过期会话清理也仍是公开上线前门槛。导出当前为 API 内同步内存处理，适合 MVP 固定四张 2048×2048 图片；未来扩展批量 SKU 时需迁移到流式或异步导出。
 
 本地 MinIO 暂时使用固定版本的 `bitnamilegacy/minio` 镜像，因为上游官方预构建镜像目前无法匿名拉取。该镜像只用于本地开发；生产环境必须选用仍受维护的 S3 兼容托管服务或经安全评审的自建镜像。

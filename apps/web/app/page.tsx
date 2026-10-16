@@ -26,7 +26,12 @@ export default function HomePage() {
     await api('/auth/logout', { method: 'POST', body: '{}' });
     router.push('/login');
   }
-  if (loading) return <main className="centered">正在载入工作区…</main>;
+  if (loading)
+    return (
+      <main className="centered" aria-live="polite" aria-busy="true">
+        正在载入工作区…
+      </main>
+    );
   return (
     <main className="workspace">
       <header className="topbar">
@@ -38,7 +43,7 @@ export default function HomePage() {
           <span>
             {user?.displayName} · {user?.creditBalance} 额度
           </span>
-          <button className="ghost" onClick={logout}>
+          <button type="button" className="ghost" onClick={logout}>
             退出
           </button>
         </div>
