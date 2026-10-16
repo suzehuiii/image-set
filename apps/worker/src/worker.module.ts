@@ -2,6 +2,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 
 import { ImageGenerationProcessor } from './image-generation.processor.js';
+import { ImageGenerationRuntime } from './image-generation.runtime.js';
 import { WorkerHealthService } from './worker-health.service.js';
 
 const redisUrl = new URL(process.env.REDIS_URL ?? 'redis://localhost:6379');
@@ -17,6 +18,10 @@ const redisUrl = new URL(process.env.REDIS_URL ?? 'redis://localhost:6379');
     }),
     BullModule.registerQueue({ name: 'image-generation' }),
   ],
-  providers: [ImageGenerationProcessor, WorkerHealthService],
+  providers: [
+    ImageGenerationProcessor,
+    ImageGenerationRuntime,
+    WorkerHealthService,
+  ],
 })
 export class WorkerModule {}

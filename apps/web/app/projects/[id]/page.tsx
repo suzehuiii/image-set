@@ -6,11 +6,13 @@ import { type ChangeEvent, useCallback, useEffect, useState } from 'react';
 import {
   api,
   type Asset,
+  type Job,
   type ProductAnalysisResult,
   type Project,
   type User,
 } from '../../lib/api';
 import { AnalysisEditor } from './analysis-editor';
+import { GenerationPanel } from './generation-panel';
 
 export default function ProjectPage() {
   const { id } = useParams<{ id: string }>();
@@ -19,20 +21,23 @@ export default function ProjectPage() {
   const [user, setUser] = useState<User>();
   const [assets, setAssets] = useState<Asset[]>([]);
   const [analysis, setAnalysis] = useState<ProductAnalysisResult>();
+  const [jobs, setJobs] = useState<Job[]>([]);
   const [error, setError] = useState('');
   const [uploading, setUploading] = useState(false);
   const [analysisPending, setAnalysisPending] = useState(false);
   const [notice, setNotice] = useState('');
   const load = useCallback(async () => {
-    const [details, list, me] = await Promise.all([
+    const [details, list, me, jobList] = await Promise.all([
       api<Project>(`/projects/${id}`),
       api<{ items: Asset[] }>(`/projects/${id}/assets`),
       api<{ user: User }>('/auth/me'),
+      api<{ items: Job[] }>(`/projects/${id}/jobs`),
     ]);
     setProject(details);
     setAssets(list.items);
     setUser(me.user);
     setAnalysis(details.analysisResult ?? undefined);
+    setJobs(jobList.items);
   }, [id]);
   useEffect(() => {
     load().catch((caught: unknown) =>
@@ -170,13 +175,22 @@ export default function ProjectPage() {
         />
       </section>
       {analysis ? (
-        <AnalysisEditor
-          value={analysis}
-          disabled={analysisPending}
-          onChange={setAnalysis}
-          onSave={saveAnalysis}
-          onReanalyze={analyzeProduct}
-        />
+        <>
+          <AnalysisEditor
+            value={analysis}
+            disabled={analysisPending}
+            onChange={setAnalysis}
+            onSave={saveAnalysis}
+            onReanalyze={analyzeProduct}
+          />
+          <GenerationPanel
+            projectId={id}
+            creditBalance={user?.creditBalance ?? 0}
+            assets={assets}
+            jobs={jobs}
+            onRefresh={load}
+          />
+        </>
       ) : (
         <section className="next-step analysis-cta">
           <div>

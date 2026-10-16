@@ -54,12 +54,14 @@ type AssetRow = {
   id: string;
   projectId: string;
   assetType: string;
+  imageRole: string | null;
   originalName: string;
   mimeType: string;
   width: number;
   height: number;
   fileSize: number;
   status: string;
+  qaResult: Record<string, unknown> | null;
   createdAt: Date;
 };
 
@@ -76,9 +78,11 @@ export class AssetsService {
   async list(userId: string, projectId: string): Promise<AssetRow[]> {
     await this.projects.findOwned(userId, projectId);
     const result = await this.database.client.pool.query<AssetRow>(
-      `select id, project_id as "projectId", asset_type as "assetType", original_name as "originalName",
-              mime_type as "mimeType", width, height, file_size as "fileSize", status, created_at as "createdAt"
-       from assets where project_id = $1 and owner_user_id = $2 and deleted_at is null order by created_at`,
+      `select id, project_id as "projectId", asset_type as "assetType", image_role as "imageRole",
+              original_name as "originalName", mime_type as "mimeType", width, height,
+              file_size as "fileSize", status, qa_result as "qaResult", created_at as "createdAt"
+       from assets where project_id = $1 and owner_user_id = $2 and deleted_at is null
+       order by created_at desc`,
       [projectId, userId],
     );
     return result.rows;
@@ -154,8 +158,9 @@ export class AssetsService {
         `insert into assets(id, project_id, owner_user_id, asset_type, object_key, original_name,
                             mime_type, width, height, file_size, checksum)
          values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-         returning id, project_id as "projectId", asset_type as "assetType", original_name as "originalName",
-                   mime_type as "mimeType", width, height, file_size as "fileSize", status, created_at as "createdAt"`,
+        returning id, project_id as "projectId", asset_type as "assetType", image_role as "imageRole",
+                   original_name as "originalName", mime_type as "mimeType", width, height,
+                   file_size as "fileSize", status, qa_result as "qaResult", created_at as "createdAt"`,
         [
           id,
           projectId,

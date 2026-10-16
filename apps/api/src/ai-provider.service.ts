@@ -29,10 +29,11 @@ export class AiProviderService implements AiProvider {
   }
 
   private instance(): OpenAiProvider {
-    this.provider ??= new OpenAiProvider(
-      process.env.OPENAI_API_KEY ?? '',
-      process.env.OPENAI_ANALYSIS_MODEL ?? 'gpt-6.1-sol',
-    );
+    this.provider ??= new OpenAiProvider(process.env.OPENAI_API_KEY ?? '', {
+      analysisModel: process.env.OPENAI_ANALYSIS_MODEL ?? 'gpt-6.1-sol',
+      imageModel: process.env.OPENAI_IMAGE_MODEL ?? 'gpt-image-2.5-sunburst',
+      reviewModel: process.env.OPENAI_REVIEW_MODEL ?? 'gpt-6-luna',
+    });
     return this.provider;
   }
 }

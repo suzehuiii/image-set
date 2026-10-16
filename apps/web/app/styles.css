@@ -495,6 +495,120 @@ textarea:focus {
 .plan-card > strong {
   color: #b9463a;
 }
+.generation-section {
+  margin-top: 24px;
+  padding: 30px;
+  border: 1px solid #e5ded9;
+  border-radius: 22px;
+  background: #fff;
+}
+.generation-heading {
+  margin: 0 0 24px;
+}
+.generation-heading h2 {
+  margin-bottom: 6px;
+}
+.generation-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  white-space: nowrap;
+}
+.generation-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.generation-card {
+  overflow: hidden;
+  border: 1px solid #e9e2de;
+  border-radius: 18px;
+  background: #faf8f7;
+}
+.generation-preview {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  background: linear-gradient(145deg, #eee9e6, #f8f6f4);
+  color: #998b86;
+}
+.generation-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.generation-progress {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 5px;
+  text-align: center;
+  color: #fff;
+  background: #241f1db8;
+  backdrop-filter: blur(3px);
+}
+.generation-progress strong {
+  font-size: 2rem;
+}
+.generation-card-body {
+  padding: 18px;
+}
+.generation-title,
+.generation-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.generation-title h3 {
+  margin: 0;
+}
+.job-status {
+  padding: 5px 8px;
+  border-radius: 999px;
+  color: #756a66;
+  background: #eee8e4;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+.job-status.succeeded {
+  color: #176c42;
+  background: #e3f4ea;
+}
+.job-status.failed {
+  color: #a62f27;
+  background: #ffe8e3;
+}
+.qa-result {
+  margin: 16px 0;
+  padding: 12px;
+  border-radius: 12px;
+}
+.qa-result.passed {
+  color: #176c42;
+  background: #eaf8f0;
+}
+.qa-result.review {
+  color: #874a08;
+  background: #fff5df;
+}
+.qa-result p {
+  margin: 5px 0;
+}
+.qa-result small {
+  display: block;
+  margin-top: 4px;
+}
+.job-error {
+  color: #a62f27;
+  font-size: 0.9rem;
+}
+.generation-card-actions {
+  margin-top: 16px;
+}
 @media (max-width: 780px) {
   .workspace,
   .form-page {
@@ -523,6 +637,16 @@ textarea:focus {
   }
   .plan-grid {
     grid-template-columns: 1fr;
+  }
+  .generation-grid {
+    grid-template-columns: 1fr;
+  }
+  .generation-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .generation-actions {
+    align-items: flex-start;
   }
   .account {
     flex-direction: column;

@@ -65,6 +65,9 @@ importers:
       bcryptjs:
         specifier: ^3.0.3
         version: 3.0.3
+      bullmq:
+        specifier: ^5.64.1
+        version: 5.81.5(supports-color@7.2.0)
       class-transformer:
         specifier: ^0.5.1
         version: 0.5.1
@@ -124,9 +127,15 @@ importers:
 
   apps/worker:
     dependencies:
+      '@image-set/ai-provider':
+        specifier: workspace:*
+        version: link:../../packages/ai-provider
       '@image-set/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@image-set/image-layout':
+        specifier: workspace:*
+        version: link:../../packages/image-layout
       '@image-set/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -154,6 +163,9 @@ importers:
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2
+      sharp:
+        specifier: ^0.35.5
+        version: 0.35.5(@types/node@22.20.5)
 
   packages/ai-provider:
     dependencies:

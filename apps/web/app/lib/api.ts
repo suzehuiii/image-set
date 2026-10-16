@@ -16,15 +16,35 @@ export type Project = {
   updatedAt: string;
 };
 export type { ProductAnalysisResult } from '@image-set/shared';
+export type { ConsistencyReviewResult, ImageRole } from '@image-set/shared';
 export type Asset = {
   id: string;
   projectId: string;
-  assetType: 'product' | 'reference';
+  assetType: 'product' | 'reference' | 'generated' | 'export';
+  imageRole: ImageRole | null;
   originalName: string;
   mimeType: string;
   width: number;
   height: number;
   fileSize: number;
+  qaResult: ConsistencyReviewResult | null;
+  createdAt: string;
+};
+export type Job = {
+  id: string;
+  projectId: string;
+  jobType: 'analysis' | 'image' | 'review' | 'export';
+  imageRole: ImageRole | null;
+  status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+  provider: string;
+  model: string;
+  resultAssetId: string | null;
+  creditsReserved: number;
+  attemptCount: number;
+  progress: number;
+  stage: string;
+  errorCode: string | null;
+  errorMessageSafe: string | null;
   createdAt: string;
 };
 
@@ -44,3 +64,4 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return body;
 }
 import type { ProductAnalysisResult } from '@image-set/shared';
+import type { ConsistencyReviewResult, ImageRole } from '@image-set/shared';

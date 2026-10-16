@@ -83,3 +83,49 @@ export const productAnalysisSchema = productAnalysisOutputSchema.superRefine(
 );
 
 export type ProductAnalysisResult = z.infer<typeof productAnalysisSchema>;
+
+export const consistencyDifferenceSchema = z.object({
+  aspect: z.enum([
+    'color',
+    'shape',
+    'structure',
+    'logo',
+    'material',
+    'quantity',
+    'accessories',
+    'proportion',
+    'claims',
+  ]),
+  severity: z.enum(['low', 'medium', 'high']),
+  description: z.string().trim().min(1).max(500),
+});
+
+export const consistencyReviewSchema = z.object({
+  status: z.enum(['passed', 'review_required']),
+  summary: z.string().trim().min(1).max(1_000),
+  differences: z.array(consistencyDifferenceSchema).max(20),
+  unverifiedClaims: z.array(z.string().trim().min(1).max(500)).max(20),
+});
+
+export type ConsistencyReviewResult = z.infer<typeof consistencyReviewSchema>;
+
+export const generationSnapshotSchema = z.object({
+  role: z.enum(IMAGE_ROLES),
+  targetPlatform: z.string().trim().min(1).max(30),
+  targetLocale: z.string().trim().min(1).max(20),
+  productCategory: z.string().trim().max(100).nullable(),
+  productBrief: z.record(z.string(), z.unknown()),
+  analysis: productAnalysisSchema,
+  productAssetIds: z.array(z.uuid()).min(1).max(10),
+  referenceAssetIds: z.array(z.uuid()).max(4),
+  requestType: z.enum(['full_set', 'regenerate', 'retry']),
+  sourceJobId: z.uuid().optional(),
+});
+
+export type GenerationSnapshot = z.infer<typeof generationSnapshotSchema>;
+
+export const imageQueuePayloadSchema = z.object({
+  jobId: z.uuid(),
+});
+
+export type ImageQueuePayload = z.infer<typeof imageQueuePayloadSchema>;

@@ -8,6 +8,11 @@ import { CreditsController, CreditsService } from './credits.js';
 import { DatabaseService } from './database.service.js';
 import { HealthController } from './health.controller.js';
 import { HealthService } from './health.service.js';
+import {
+  GenerationsController,
+  GenerationsService,
+  GenerationQueueService,
+} from './generations.js';
 import { ProjectsController, ProjectsService } from './projects.js';
 
 @Module({
@@ -17,6 +22,7 @@ import { ProjectsController, ProjectsService } from './projects.js';
     ProjectsController,
     AssetsController,
     AnalysisController,
+    GenerationsController,
     CreditsController,
   ],
   providers: [
@@ -28,6 +34,8 @@ import { ProjectsController, ProjectsService } from './projects.js';
     AssetsService,
     AiProviderService,
     AnalysisService,
+    GenerationQueueService,
+    GenerationsService,
     CreditsService,
   ],
 })

@@ -137,6 +137,20 @@ export async function migrateDatabase(pool: Pool): Promise<void> {
       `);
       await client.query('insert into schema_migrations(version) values (2)');
     }
+    const versionThree = await client.query<{ version: number }>(
+      'select version from schema_migrations where version = 3',
+    );
+    if (versionThree.rowCount === 0) {
+      await client.query(`
+        alter table generation_jobs
+          add column progress integer not null default 0 check (progress between 0 and 100),
+          add column stage varchar(30) not null default 'queued';
+        create index generation_jobs_queued_idx
+          on generation_jobs(status, job_type, created_at)
+          where status in ('queued', 'running');
+      `);
+      await client.query('insert into schema_migrations(version) values (3)');
+    }
     await client.query('commit');
   } catch (error) {
     await client.query('rollback');

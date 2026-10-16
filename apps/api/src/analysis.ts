@@ -42,11 +42,15 @@ type JobRow = {
   id: string;
   projectId: string;
   jobType: string;
+  imageRole: string | null;
   status: string;
   provider: string;
   model: string;
   creditsReserved: number;
   attemptCount: number;
+  resultAssetId: string | null;
+  progress: number;
+  stage: string;
   errorCode: string | null;
   errorMessageSafe: string | null;
   startedAt: Date | null;
@@ -151,8 +155,10 @@ export class AnalysisService {
   async listJobs(userId: string, projectId: string): Promise<JobRow[]> {
     const result = await this.database.client.pool.query<JobRow>(
       `select j.id, j.project_id as "projectId", j.job_type as "jobType", j.status,
-              j.provider, j.model, j.credits_reserved as "creditsReserved",
+              j.image_role as "imageRole", j.provider, j.model,
+              j.result_asset_id as "resultAssetId", j.credits_reserved as "creditsReserved",
               j.attempt_count as "attemptCount", j.error_code as "errorCode",
+              j.progress, j.stage,
               j.error_message_safe as "errorMessageSafe", j.started_at as "startedAt",
               j.completed_at as "completedAt", j.created_at as "createdAt"
        from generation_jobs j join projects p on p.id = j.project_id
@@ -166,8 +172,10 @@ export class AnalysisService {
   async findJob(userId: string, jobId: string): Promise<JobRow> {
     const result = await this.database.client.pool.query<JobRow>(
       `select j.id, j.project_id as "projectId", j.job_type as "jobType", j.status,
-              j.provider, j.model, j.credits_reserved as "creditsReserved",
+              j.image_role as "imageRole", j.provider, j.model,
+              j.result_asset_id as "resultAssetId", j.credits_reserved as "creditsReserved",
               j.attempt_count as "attemptCount", j.error_code as "errorCode",
+              j.progress, j.stage,
               j.error_message_safe as "errorMessageSafe", j.started_at as "startedAt",
               j.completed_at as "completedAt", j.created_at as "createdAt"
        from generation_jobs j join projects p on p.id = j.project_id

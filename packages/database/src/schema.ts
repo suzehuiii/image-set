@@ -112,6 +112,8 @@ export const generationJobs = pgTable(
     }),
     creditsReserved: integer('credits_reserved').notNull().default(0),
     attemptCount: integer('attempt_count').notNull().default(0),
+    progress: integer().notNull().default(0),
+    stage: varchar({ length: 30 }).notNull().default('queued'),
     errorCode: varchar('error_code', { length: 80 }),
     errorMessageSafe: varchar('error_message_safe', { length: 500 }),
     startedAt: timestamp('started_at', { withTimezone: true }),
