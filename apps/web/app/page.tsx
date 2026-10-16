@@ -1,42 +1,89 @@
-const milestones = [
-  ['M0', '项目初始化', '已完成'],
-  ['M1', '账号、项目与素材', '待开始'],
-  ['M2', 'AI 商品分析', '待开始'],
-  ['M3–M5', '生成、导出与交付', '待开始'],
-];
+'use client';
+
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { api, type Project, type User } from './lib/api';
 
 export default function HomePage() {
+  const router = useRouter();
+  const [user, setUser] = useState<User>();
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    Promise.all([
+      api<{ user: User }>('/auth/me'),
+      api<{ items: Project[] }>('/projects'),
+    ])
+      .then(([me, list]) => {
+        setUser(me.user);
+        setProjects(list.items);
+      })
+      .catch(() => router.replace('/login'))
+      .finally(() => setLoading(false));
+  }, [router]);
+  async function logout() {
+    await api('/auth/logout', { method: 'POST', body: '{}' });
+    router.push('/login');
+  }
+  if (loading) return <main className="centered">正在载入工作区…</main>;
   return (
-    <main>
-      <section className="hero">
-        <p className="eyebrow">PRODUCT IMAGE STUDIO</p>
-        <h1>商品套图 AI</h1>
-        <p className="lede">
-          从真实商品图出发，生成适合海外电商的商品信息与标准套图。
-        </p>
-        <div className="status">
-          <span />
-          M0 本地开发底座已就绪
-        </div>
-      </section>
-      <section className="panel" aria-labelledby="milestone-heading">
+    <main className="workspace">
+      <header className="topbar">
         <div>
-          <p className="eyebrow">DEVELOPMENT STATUS</p>
-          <h2 id="milestone-heading">MVP 实施进度</h2>
+          <p className="eyebrow">PRODUCT IMAGE STUDIO</p>
+          <h1>项目</h1>
         </div>
-        <div className="milestones">
-          {milestones.map(([code, name, state]) => (
-            <article
-              key={code}
-              className={state === '已完成' ? 'complete' : ''}
-            >
-              <strong>{code}</strong>
-              <span>{name}</span>
-              <small>{state}</small>
-            </article>
-          ))}
+        <div className="account">
+          <span>
+            {user?.displayName} · {user?.creditBalance} 额度
+          </span>
+          <button className="ghost" onClick={logout}>
+            退出
+          </button>
         </div>
+      </header>
+      <section className="section-head">
+        <div>
+          <h2>最近项目</h2>
+          <p>创建项目并上传真实商品图，AI 分析将在 M2 接入。</p>
+        </div>
+        <Link className="primary link-button" href="/projects/new">
+          创建项目
+        </Link>
       </section>
+      {projects.length === 0 ? (
+        <section className="empty">
+          <span>✦</span>
+          <h2>从第一件商品开始</h2>
+          <p>可上传 1–10 张商品图和最多 4 张风格参考图。</p>
+          <Link className="primary link-button" href="/projects/new">
+            新建项目
+          </Link>
+        </section>
+      ) : (
+        <section className="project-grid">
+          {projects.map((project) => (
+            <Link
+              key={project.id}
+              href={`/projects/${project.id}`}
+              className="project-card"
+            >
+              <div className="project-thumb">
+                {project.assetCount ? `${project.assetCount} 张素材` : '待上传'}
+              </div>
+              <h3>{project.name}</h3>
+              <p>
+                {project.productCategory || '未填写品类'} ·{' '}
+                {project.targetPlatform.replace('_', ' ')}
+              </p>
+              <small>
+                更新于 {new Date(project.updatedAt).toLocaleString('zh-CN')}
+              </small>
+            </Link>
+          ))}
+        </section>
+      )}
     </main>
   );
 }
