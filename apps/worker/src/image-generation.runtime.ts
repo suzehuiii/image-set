@@ -1,5 +1,6 @@
 import {
   AiProviderError,
+  buildCampaignPrompt,
   OpenAiProvider,
   resolveOpenAiProviderRouting,
   type AiImageAsset,
@@ -12,6 +13,9 @@ import {
 import { buildImagePrompt } from '@image-set/image-layout';
 import {
   generationSnapshotSchema,
+  isBrief,
+  imageRatio,
+  ratioDimensions,
   IMAGE_ROLES,
   imageQueuePayloadSchema,
   type ConsistencyReviewResult,
@@ -87,14 +91,24 @@ export class ImageGenerationRuntime
       await this.progress(runtimeJob.id, 30, 'generating');
       const generated = await this.ai('image').generateImage({
         role: snapshot.role,
-        prompt: buildImagePrompt({
-          role: snapshot.role,
-          targetPlatform: snapshot.targetPlatform,
-          targetLocale: snapshot.targetLocale,
-          analysis: snapshot.analysis,
-          productReferenceCount: productAssets.length,
-          styleReferenceCount: referenceAssets.length,
-        }),
+        prompt: isBrief(snapshot.analysis)
+          ? buildCampaignPrompt(
+              snapshot.analysis,
+              snapshot.role,
+              snapshot.targetPlatform,
+            )
+          : buildImagePrompt({
+              role: snapshot.role,
+              targetPlatform: snapshot.targetPlatform,
+              targetLocale: snapshot.targetLocale,
+              analysis: snapshot.analysis,
+              productReferenceCount: productAssets.length,
+              styleReferenceCount: referenceAssets.length,
+            }),
+        aspectRatio:
+          isBrief(snapshot.analysis) && snapshot.analysis.campaign
+            ? imageRatio(snapshot.analysis.campaign, snapshot.role)
+            : '1:1',
         productAssets,
         referenceAssets,
         safetyIdentifier: createHash('sha256')
@@ -102,12 +116,21 @@ export class ImageGenerationRuntime
           .digest('hex')
           .slice(0, 64),
       });
+      const dimensions =
+        isBrief(snapshot.analysis) && snapshot.analysis.campaign
+          ? ratioDimensions(
+              imageRatio(snapshot.analysis.campaign, snapshot.role),
+            )
+          : ratioDimensions('1:1');
       const normalized = await sharp(
         Buffer.from(generated.base64Data, 'base64'),
       )
         .rotate()
         .flatten({ background: '#ffffff' })
-        .resize(2048, 2048, { fit: 'cover', position: 'centre' })
+        .resize(dimensions.width, dimensions.height, {
+          fit: 'cover',
+          position: 'centre',
+        })
         .png({ compressionLevel: 9 })
         .toBuffer();
       await this.progress(runtimeJob.id, 65, 'reviewing');
@@ -127,7 +150,17 @@ export class ImageGenerationRuntime
           mimeType: 'image/jpeg',
           base64Data: reviewImage.toString('base64'),
         },
-        productBrief: snapshot.productBrief,
+        productBrief: isBrief(snapshot.analysis)
+          ? { ...snapshot.productBrief, brief: snapshot.analysis }
+          : snapshot.productBrief,
+        expectedCopy: isBrief(snapshot.analysis)
+          ? snapshot.analysis.campaign?.images.find(
+              (x) => x.role === snapshot.role,
+            )?.copy
+          : undefined,
+        targetLocale: isBrief(snapshot.analysis)
+          ? snapshot.analysis.campaign?.targetLocale
+          : snapshot.targetLocale,
       });
       await this.progress(runtimeJob.id, 90, 'storing');
       objectKey = `${runtimeJob.userId}/${runtimeJob.projectId}/generated/${runtimeJob.id}.png`;
@@ -280,7 +313,7 @@ export class ImageGenerationRuntime
         `insert into assets(id, project_id, owner_user_id, asset_type, image_role,
                             object_key, original_name, mime_type, width, height,
                             file_size, checksum, status, qa_result)
-         values ($1,$2,$3,'generated',$4,$5,$6,'image/png',2048,2048,$7,$8,'ready',$9)`,
+         values ($1,$2,$3,'generated',$4,$5,$6,'image/png',$10,$11,$7,$8,'ready',$9)`,
         [
           assetId,
           job.projectId,
@@ -291,6 +324,17 @@ export class ImageGenerationRuntime
           fileSize,
           checksum,
           review,
+          ...(isBrief(job.inputSnapshot.analysis) &&
+          job.inputSnapshot.analysis.campaign
+            ? Object.values(
+                ratioDimensions(
+                  imageRatio(
+                    job.inputSnapshot.analysis.campaign,
+                    job.imageRole,
+                  ),
+                ),
+              )
+            : [2048, 2048]),
         ],
       );
       const updated = await client.query(
@@ -413,9 +457,10 @@ export class ImageGenerationRuntime
          when (
            select count(distinct image_role) from assets
            where project_id = $1 and owner_user_id = $2 and asset_type = 'generated'
-             and image_role = any($3::text[])
+             and image_role = any(case when analysis_result->>'schemaVersion'='2' then array(select value->>'role' from jsonb_array_elements(analysis_result->'campaign'->'images')) else $3::text[] end)
+             and exists (select 1 from generation_jobs j where j.result_asset_id=assets.id and (analysis_result->>'schemaVersion' is distinct from '2' or j.input_snapshot->'analysis'->'campaign'->>'id'=analysis_result->'campaign'->>'id'))
              and status = 'ready' and deleted_at is null
-         ) = $4 then 'completed'
+         ) = case when analysis_result->>'schemaVersion'='2' then jsonb_array_length(analysis_result->'campaign'->'images') else $4 end then 'completed'
          when analysis_result is not null then 'ready'
          else 'failed'
        end, updated_at = now()

@@ -57,6 +57,8 @@ export default function NewProjectPage() {
             目标平台
             <select name="targetPlatform">
               <option value="amazon_us">Amazon US</option>
+              <option value="amazon_jp">Amazon Japan</option>
+              <option value="amazon_de">Amazon Germany</option>
               <option value="shopify">Shopify</option>
               <option value="tiktok_shop">TikTok Shop</option>
             </select>

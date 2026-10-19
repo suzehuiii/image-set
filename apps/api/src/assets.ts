@@ -1,6 +1,8 @@
+import { extractManualText } from './manual-text.js';
 import {
   BadRequestException,
   Controller,
+  ConflictException,
   Delete,
   Get,
   Injectable,
@@ -97,6 +99,7 @@ export class AssetsService {
     const parsedAssetType = parseUploadAssetType(assetType);
     if (!file) throw new BadRequestException('请选择要上传的文件');
     await this.projects.findOwned(userId, projectId);
+    await this.assertEditable(userId, projectId);
     const inspection = await inspectUpload(parsedAssetType, file);
     const limit = this.assetLimit(parsedAssetType);
     const count = await this.database.client.pool.query<{ count: number }>(
@@ -144,8 +147,8 @@ export class AssetsService {
         ],
       );
       await this.database.client.pool.query(
-        'update projects set updated_at = now() where id = $1',
-        [projectId],
+        `update projects set updated_at=now(), analysis_result=case when analysis_result->>'schemaVersion'='2' then case when $2='reference' then jsonb_set(analysis_result,'{campaign}','null'::jsonb) else null end else analysis_result end where id=$1`,
+        [projectId, parsedAssetType],
       );
       return result.rows[0] as AssetRow;
     } catch (error) {
@@ -177,15 +180,37 @@ export class AssetsService {
     return '每个项目最多上传 1 份产品说明书';
   }
 
+  private async assertEditable(userId: string, projectId: string) {
+    const active = await this.database.client.pool.query(
+      `select id from generation_jobs where user_id=$1 and project_id=$2 and status in ('queued','running') limit 1`,
+      [userId, projectId],
+    );
+    if (active.rowCount)
+      throw new ConflictException('任务执行期间不能更换素材');
+  }
+
   async remove(userId: string, assetId: string): Promise<void> {
+    const found = await this.database.client.pool.query<{
+      projectId: string;
+      assetType: string;
+    }>(
+      `select project_id as "projectId",asset_type as "assetType" from assets where id=$1 and owner_user_id=$2 and deleted_at is null`,
+      [assetId, userId],
+    );
+    const owned = found.rows[0];
+    if (!owned) throw new NotFoundException('素材不存在');
+    await this.assertEditable(userId, owned.projectId);
     const result = await this.database.client.pool.query<{ objectKey: string }>(
-      `update assets set deleted_at = now(), status = 'deleted'
-       where id = $1 and owner_user_id = $2 and deleted_at is null
-       returning object_key as "objectKey"`,
+      `update assets set deleted_at=now(),status='deleted' where id=$1 and owner_user_id=$2 and deleted_at is null returning object_key as "objectKey"`,
       [assetId, userId],
     );
     const asset = result.rows[0];
     if (!asset) throw new NotFoundException('素材不存在');
+    if (['product', 'reference', 'manual'].includes(owned.assetType))
+      await this.database.client.pool.query(
+        `update projects set updated_at=now(),analysis_result=case when analysis_result->>'schemaVersion'='2' then case when $2='reference' then jsonb_set(analysis_result,'{campaign}','null'::jsonb) else null end else analysis_result end where id=$1`,
+        [owned.projectId, owned.assetType],
+      );
     await this.storage.removeObject(this.bucket, asset.objectKey);
   }
 
@@ -232,19 +257,64 @@ export class AssetsService {
     );
   }
 
+  async manualAnalysisInput(
+    userId: string,
+    projectId: string,
+  ): Promise<{ text: string; warning: string }> {
+    const result = await this.database.client.pool.query<{
+      objectKey: string;
+      mimeType: string;
+    }>(
+      `select object_key as "objectKey", mime_type as "mimeType" from assets where project_id=$1 and owner_user_id=$2 and asset_type='manual' and status='ready' and deleted_at is null limit 1`,
+      [projectId, userId],
+    );
+    const asset = result.rows[0];
+    if (!asset) return { text: '', warning: '' };
+    try {
+      const stream = await this.storage.getObject(this.bucket, asset.objectKey);
+      const chunks: Buffer[] = [];
+      let size = 0;
+      for await (const chunk of stream) {
+        const buffer = Buffer.from(chunk as Uint8Array);
+        size += buffer.length;
+        if (size > 15 * 1024 * 1024) throw new Error('说明书超过解析限制');
+        chunks.push(buffer);
+      }
+      const text = await extractManualText(
+        Buffer.concat(chunks),
+        asset.mimeType,
+      );
+      return {
+        text,
+        warning: text.trim()
+          ? ''
+          : '说明书没有可提取文字（扫描件请手工补充），本次只依据商品图与用户资料分析。',
+      };
+    } catch (error) {
+      return {
+        text: '',
+        warning:
+          error instanceof Error
+            ? error.message
+            : '说明书提取失败，请手工补充。',
+      };
+    }
+  }
+
   async productAnalysisInputs(
     userId: string,
     projectId: string,
+    assetType: 'product' | 'reference' = 'product',
   ): Promise<ProductAnalysisAsset[]> {
     const result = await this.database.client.pool.query<{
       objectKey: string;
     }>(
       `select object_key as "objectKey"
        from assets
-       where project_id = $1 and owner_user_id = $2 and asset_type = 'product'
+       where project_id = $1 and owner_user_id = $2 and asset_type = $3
          and status = 'ready' and deleted_at is null
        order by created_at`,
-      [projectId, userId],
+      [projectId, userId, assetType],
     );
     return Promise.all(
       result.rows.map(async (asset) => {

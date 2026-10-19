@@ -18,6 +18,9 @@ import { randomUUID } from 'node:crypto';
 import {
   generationSnapshotSchema,
   IMAGE_ROLES,
+  ALL_IMAGE_ROLES,
+  isBrief,
+  validateCampaign,
   type GenerationSnapshot,
   type ImageQueuePayload,
   type ImageRole,
@@ -27,7 +30,7 @@ import { AuthGuard, CurrentUser, type AuthUser } from './auth.js';
 import { DatabaseService } from './database.service.js';
 
 const IMAGE_CREDITS = 3;
-const PROMPT_VERSION = 'ecommerce-nine-image-zh-v3';
+const PROMPT_VERSION = 'ecom-skill-direct-v1';
 
 type GenerationJobRow = {
   id: string;
@@ -64,7 +67,7 @@ type GenerationProject = {
 
 export class CreateGenerationDto {
   @IsOptional()
-  @IsIn(IMAGE_ROLES)
+  @IsIn(ALL_IMAGE_ROLES)
   role?: ImageRole;
 }
 
@@ -118,7 +121,21 @@ export class GenerationsService {
     requestedRole?: ImageRole,
   ) {
     const key = this.validateKey(idempotencyKey, requestedRole ? 120 : 105);
-    const roles = requestedRole ? [requestedRole] : [...IMAGE_ROLES];
+    const project = await this.database.client.pool.query<{
+      analysis: unknown;
+    }>(
+      `select analysis_result as analysis from projects where id=$1 and user_id=$2 and deleted_at is null`,
+      [projectId, userId],
+    );
+    const parsed = generationSnapshotSchema.shape.analysis.safeParse(
+      project.rows[0]?.analysis,
+    );
+    const roles = requestedRole
+      ? [requestedRole]
+      : parsed.success && isBrief(parsed.data)
+        ? (parsed.data.campaign?.images.map((x) => x.role) ?? [])
+        : [...IMAGE_ROLES];
+    if (!roles.length) throw new BadRequestException('请先完成图片策划');
     const keys = requestedRole ? [key] : roles.map((role) => `${key}:${role}`);
     const reserved = await this.reserve(
       userId,
@@ -282,6 +299,25 @@ export class GenerationsService {
       if (!analysis.success) {
         throw new BadRequestException('请先完成并保存商品分析');
       }
+      if (isBrief(analysis.data)) {
+        if (
+          !analysis.data.confirmed ||
+          !analysis.data.campaign?.confirmed ||
+          !validateCampaign(analysis.data, analysis.data.campaign)
+        )
+          throw new BadRequestException('请先保存并确认商品简报及图片方案');
+        const campaign = analysis.data.campaign;
+        if (
+          roles.some((role) => !campaign?.images.some((x) => x.role === role))
+        )
+          throw new BadRequestException('图片槽位不属于当前方案');
+      } else if (roles.some((role) => !IMAGE_ROLES.some((x) => x === role)))
+        throw new BadRequestException('图片槽位不属于旧版九图');
+      const active = await client.query(
+        `select id from generation_jobs where project_id=$1 and user_id=$2 and status in ('queued','running') limit 1`,
+        [projectId, userId],
+      );
+      if (active.rowCount) throw new ConflictException('该项目已有任务执行中');
       const assets = await client.query<{
         id: string;
         assetType: 'product' | 'reference';
@@ -313,7 +349,7 @@ export class GenerationsService {
           productBrief: project.productBrief,
           analysis: analysis.data,
           productAssetIds,
-          referenceAssetIds,
+          referenceAssetIds: isBrief(analysis.data) ? [] : referenceAssetIds,
           requestType,
         };
         const job = await this.insertJob(
@@ -381,7 +417,9 @@ export class GenerationsService {
         userId,
         role,
         process.env.OPENAI_IMAGE_MODEL ?? 'gpt-image-2.5-sunburst',
-        PROMPT_VERSION,
+        isBrief(snapshot.analysis)
+          ? PROMPT_VERSION
+          : 'ecommerce-nine-image-zh-v3',
         key,
         snapshot,
         IMAGE_CREDITS,

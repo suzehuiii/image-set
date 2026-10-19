@@ -8,9 +8,10 @@ export type Project = {
   id: string;
   name: string;
   targetPlatform: string;
+  targetLocale: string;
   productCategory: string | null;
   productBrief: Record<string, unknown>;
-  analysisResult: ProductAnalysisResult | null;
+  analysisResult: ProjectAnalysis | null;
   status: string;
   assetCount: number;
   updatedAt: string;
@@ -41,6 +42,7 @@ export type Job = {
   resultAssetId: string | null;
   creditsReserved: number;
   attemptCount: number;
+  campaignId?: string;
   progress: number;
   stage: string;
   errorCode: string | null;
@@ -63,5 +65,6 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   if (!response.ok) throw new Error(body.message ?? '请求失败，请稍后重试');
   return body;
 }
-import type { ProductAnalysisResult } from '@image-set/shared';
 import type { ConsistencyReviewResult, ImageRole } from '@image-set/shared';
+
+import type { ProjectAnalysis } from '@image-set/shared';

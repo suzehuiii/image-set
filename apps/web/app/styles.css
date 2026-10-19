@@ -833,3 +833,39 @@ textarea:focus {
     animation-iteration-count: 1 !important;
   }
 }
+
+.brief-fields {
+  border: 0;
+  padding: 0;
+  margin: 20px 0;
+  min-width: 0;
+  display: grid;
+  gap: 16px;
+}
+.brief-item {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  margin: 12px 0;
+  border: 1px solid #e8e2df;
+  border-radius: 12px;
+}
+.inline-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.inline-check input {
+  width: 18px;
+  min-height: 18px;
+}
+fieldset.field-grid,
+fieldset.plan-grid {
+  border: 0;
+  padding: 0;
+  margin: 16px 0;
+  min-width: 0;
+}
+.generation-preview img {
+  object-fit: contain;
+}

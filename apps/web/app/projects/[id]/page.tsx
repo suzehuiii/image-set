@@ -1,4 +1,5 @@
 'use client';
+import { isBrief, type ProjectAnalysis } from '@image-set/shared';
 
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -13,10 +14,10 @@ import {
   api,
   type Asset,
   type Job,
-  type ProductAnalysisResult,
   type Project,
   type User,
 } from '../../lib/api';
+import { BriefEditor } from './brief-editor';
 import { AnalysisEditor } from './analysis-editor';
 import { GenerationPanel } from './generation-panel';
 
@@ -28,7 +29,7 @@ export default function ProjectPage() {
   const [project, setProject] = useState<Project>();
   const [user, setUser] = useState<User>();
   const [assets, setAssets] = useState<Asset[]>([]);
-  const [analysis, setAnalysis] = useState<ProductAnalysisResult>();
+  const [analysis, setAnalysis] = useState<ProjectAnalysis>();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [error, setError] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -75,7 +76,7 @@ export default function ProjectPage() {
   async function remove(assetId: string) {
     if (!confirm('删除这个素材？')) return;
     await api(`/assets/${assetId}`, { method: 'DELETE' });
-    setAssets((current) => current.filter((asset) => asset.id !== assetId));
+    await load();
   }
   async function removeProject() {
     if (!confirm('删除项目？此操作会停止后续生成。')) return;
@@ -92,11 +93,14 @@ export default function ProjectPage() {
     setNotice('');
     try {
       const result = await api<{
-        analysis: ProductAnalysisResult;
+        analysis: ProjectAnalysis;
         creditBalance: number;
       }>(`/projects/${id}/analyze`, {
         method: 'POST',
-        headers: { 'Idempotency-Key': crypto.randomUUID() },
+        headers: {
+          'Idempotency-Key': crypto.randomUUID(),
+          'Accept-Language': navigator.language,
+        },
       });
       setAnalysis(result.analysis);
       setProject((current) =>
@@ -107,7 +111,7 @@ export default function ProjectPage() {
       setUser((current) =>
         current ? { ...current, creditBalance: result.creditBalance } : current,
       );
-      setNotice('分析完成，结果已保存。');
+      setNotice('简报已提取，请检查并确认后进行图片策划。');
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '商品分析失败');
       await load().catch(() => undefined);
@@ -115,20 +119,23 @@ export default function ProjectPage() {
       setAnalysisPending(false);
     }
   }
-  async function saveAnalysis() {
-    if (!analysis) return;
+  async function saveAnalysis(next: ProjectAnalysis | undefined = analysis) {
+    if (!next) return;
     setAnalysisPending(true);
     setError('');
     setNotice('');
     try {
-      const result = await api<{ analysis: ProductAnalysisResult }>(
+      const result = await api<{ analysis: ProjectAnalysis }>(
         `/projects/${id}/content`,
         {
           method: 'PATCH',
-          body: JSON.stringify({ analysis }),
+          body: JSON.stringify({ analysis: next }),
         },
       );
       setAnalysis(result.analysis);
+      setProject((current) =>
+        current ? { ...current, analysisResult: result.analysis } : current,
+      );
       setNotice('修改已保存；本次未扣额度。');
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '保存失败');
@@ -180,8 +187,8 @@ export default function ProjectPage() {
           onRemove={remove}
         />
         <UploadGroup
-          title="风格参考图"
-          hint="可选，最多 4 张"
+          title="产品／竞品参考图"
+          hint="可选，最多 4 张；仅参考风格与构图，不提取竞品事实"
           type="reference"
           assets={assets}
           uploading={uploading}
@@ -190,7 +197,7 @@ export default function ProjectPage() {
         />
         <UploadGroup
           title="产品说明书"
-          hint="可选，1 份 PDF/DOC/DOCX，≤15MB"
+          hint="可选，≤15MB；提取 PDF/DOCX 文字，旧 DOC 请转换"
           type="manual"
           assets={assets}
           uploading={uploading}
@@ -198,19 +205,71 @@ export default function ProjectPage() {
           onRemove={remove}
         />
       </section>
+      {assets.some((a) => a.assetType === 'generated') && (
+        <details className="analysis-card">
+          <summary>已生成图片历史（含旧方案）</summary>
+          <div className="asset-grid">
+            {assets
+              .filter((a) => a.assetType === 'generated')
+              .map((a) => (
+                <a key={a.id} href={`/api/assets/${a.id}/download`}>
+                  <img
+                    style={{
+                      maxWidth: 140,
+                      maxHeight: 140,
+                      objectFit: 'contain',
+                    }}
+                    src={`/api/assets/${a.id}/content`}
+                    alt={a.originalName}
+                  />
+                  <small>
+                    {a.imageRole} · {a.width} × {a.height}
+                  </small>
+                </a>
+              ))}
+          </div>
+        </details>
+      )}
       {analysis ? (
         <>
-          <AnalysisEditor
-            value={analysis}
-            disabled={analysisPending}
-            onChange={setAnalysis}
-            onSave={saveAnalysis}
-            onReanalyze={analyzeProduct}
-          />
+          {isBrief(analysis) ? (
+            <BriefEditor
+              value={analysis}
+              disabled={
+                analysisPending ||
+                jobs.some(
+                  (j) => j.status === 'running' || j.status === 'queued',
+                )
+              }
+              dirty={
+                JSON.stringify(analysis) !==
+                JSON.stringify(project?.analysisResult)
+              }
+              projectId={id}
+              platform={project?.targetPlatform ?? 'amazon_us'}
+              balance={user?.creditBalance ?? 0}
+              onChange={setAnalysis}
+              onSave={saveAnalysis}
+              onReanalyze={analyzeProduct}
+              onPlanned={load}
+            />
+          ) : (
+            <AnalysisEditor
+              value={analysis}
+              disabled={analysisPending}
+              onChange={setAnalysis}
+              onSave={() => saveAnalysis()}
+              onReanalyze={analyzeProduct}
+            />
+          )}
           <GenerationPanel
             projectId={id}
             creditBalance={user?.creditBalance ?? 0}
             analysis={analysis}
+            dirty={
+              JSON.stringify(analysis) !==
+              JSON.stringify(project?.analysisResult)
+            }
             assets={assets}
             jobs={jobs}
             onRefresh={load}
@@ -220,7 +279,7 @@ export default function ProjectPage() {
         <section className="next-step analysis-cta">
           <div>
             <p className="eyebrow">AI PRODUCT ANALYSIS</p>
-            <h2>生成双语商品信息与四图规划</h2>
+            <h2>提取商品身份、功能、卖点、人群与场景</h2>
             <p>基于商品图与已填资料分析；成功消耗 1 额度，失败自动退款。</p>
           </div>
           <div className="analysis-cta-actions">

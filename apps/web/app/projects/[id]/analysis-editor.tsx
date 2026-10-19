@@ -3,7 +3,7 @@
 import type { ProductAnalysisResult } from '../../lib/api';
 import type { ImageRole } from '@image-set/shared';
 
-const ROLE_LABELS: Record<ImageRole, string> = {
+const ROLE_LABELS: Partial<Record<ImageRole, string>> = {
   main: '白底主图',
   feature_1: '功能卖点图 1',
   feature_2: '功能卖点图 2',
@@ -189,7 +189,7 @@ export function AnalysisEditor({
         </label>
       </div>
       <div className="analysis-section">
-        <h3>默认四图规划</h3>
+        <h3>旧版九图规划</h3>
         <div className="plan-grid">
           {value.imagePlan.map((plan, index) => (
             <article className="plan-card" key={plan.role}>

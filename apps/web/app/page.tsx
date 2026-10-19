@@ -51,7 +51,9 @@ export default function HomePage() {
       <section className="section-head">
         <div>
           <h2>最近项目</h2>
-          <p>上传真实商品图，生成可编辑的双语商品信息与四图规划。</p>
+          <p>
+            上传真实商品图，确认商品简报，策划并生成整套电商展示图与详情图。
+          </p>
         </div>
         <Link className="primary link-button" href="/projects/new">
           创建项目

@@ -67,7 +67,7 @@ export function classifyRateLimit(
       ),
     };
   }
-  if (/^\/api\/projects\/[^/]+\/analyze$/.test(path)) {
+  if (/^\/api\/projects\/[^/]+\/(analyze|plan)$/.test(path)) {
     return {
       id: 'analysis',
       limit: positiveInteger(environment.RATE_LIMIT_ANALYSIS_MAX, 10),

@@ -1,3 +1,4 @@
+import sharp from 'sharp';
 import {
   BadRequestException,
   Body,
@@ -13,14 +14,15 @@ import { zipSync } from 'fflate';
 import { Client as MinioClient } from 'minio';
 import { createHash, randomUUID } from 'node:crypto';
 import {
-  EXPORT_SIZE,
   marketingCopyForRole,
   renderExportImage,
   type ExportImageFormat,
 } from '@image-set/image-layout';
 import {
   IMAGE_ROLES,
-  productAnalysisSchema,
+  ALL_IMAGE_ROLES,
+  projectAnalysisSchema,
+  isBrief,
   type ImageRole,
 } from '@image-set/shared';
 
@@ -53,6 +55,8 @@ type ExportProject = {
 type SourceAsset = {
   imageRole: ImageRole;
   objectKey: string;
+  width: number;
+  height: number;
 };
 
 export type ExportAsset = {
@@ -73,7 +77,7 @@ export class CreateExportDto {
   format!: ExportImageFormat;
 
   @IsOptional()
-  @IsIn(IMAGE_ROLES)
+  @IsIn(ALL_IMAGE_ROLES)
   role?: ImageRole;
 }
 
@@ -97,21 +101,32 @@ export class ExportsService {
     );
     const project = projectResult.rows[0];
     if (!project) throw new NotFoundException('项目不存在');
-    const parsedAnalysis = productAnalysisSchema.safeParse(
+    const parsedAnalysis = projectAnalysisSchema.safeParse(
       project.analysisResult,
     );
     if (!parsedAnalysis.success) {
       throw new BadRequestException('请先完成并保存商品分析');
     }
-    const sources = await this.latestSources(userId, projectId);
-    const roles = requestedRole ? [requestedRole] : [...IMAGE_ROLES];
+    const analysis = parsedAnalysis.data;
+    const campaign = isBrief(analysis) ? analysis.campaign : null;
+    const allRoles = campaign
+      ? campaign.images.map((x) => x.role)
+      : [...IMAGE_ROLES];
+    if (isBrief(analysis) && !campaign)
+      throw new BadRequestException(
+        '请先完成图片策划；历史成品可从原图链接下载',
+      );
+    if (requestedRole && !allRoles.some((role) => role === requestedRole))
+      throw new BadRequestException('图片不属于当前方案');
+    const sources = await this.latestSources(userId, projectId, campaign?.id);
+    const roles = requestedRole ? [requestedRole] : allRoles;
     const selected = roles.map((role) => {
       const source = sources.get(role);
       if (!source) {
         throw new BadRequestException(
           requestedRole
             ? '该图尚未生成成功，无法导出'
-            : '请先完成九张图片后再导出整套 ZIP',
+            : '请先完成当前方案的全部图片后再导出整套 ZIP',
         );
       }
       return source;
@@ -122,7 +137,12 @@ export class ExportsService {
         buffer: await renderExportImage({
           source: await this.readObject(source.objectKey),
           role: source.imageRole,
-          copy: marketingCopyForRole(parsedAnalysis.data, source.imageRole),
+          copy: isBrief(analysis)
+            ? ''
+            : marketingCopyForRole(analysis, source.imageRole),
+          direct: Boolean(campaign),
+          width: source.width,
+          height: source.height,
           format,
         }),
       })),
@@ -130,7 +150,7 @@ export class ExportsService {
     const projectSlug = slugify(project.name);
     if (requestedRole) {
       const item = rendered[0] as { role: ImageRole; buffer: Buffer };
-      const originalName = `${projectSlug}-${item.role}-${EXPORT_SIZE}x${EXPORT_SIZE}.${format}`;
+      const originalName = `${projectSlug}-${item.role}.${format}`;
       const asset = await this.saveOrReuse({
         userId,
         projectId,
@@ -164,14 +184,15 @@ export class ExportsService {
   private async latestSources(
     userId: string,
     projectId: string,
+    campaignId?: string,
   ): Promise<Map<ImageRole, SourceAsset>> {
     const result = await this.database.client.pool.query<SourceAsset>(
-      `select distinct on (image_role) image_role as "imageRole", object_key as "objectKey"
-       from assets
-       where project_id = $1 and owner_user_id = $2 and asset_type = 'generated'
-         and image_role = any($3::text[]) and status = 'ready' and deleted_at is null
-       order by image_role, created_at desc`,
-      [projectId, userId, IMAGE_ROLES],
+      `select distinct on (a.image_role) a.image_role as "imageRole", a.object_key as "objectKey", a.width,a.height
+       from assets a join generation_jobs j on j.result_asset_id=a.id
+       where a.project_id=$1 and a.owner_user_id=$2 and a.asset_type='generated' and a.status='ready' and a.deleted_at is null
+         and (($3::text is null and j.input_snapshot->'analysis'->>'schemaVersion' is null) or j.input_snapshot->'analysis'->'campaign'->>'id'=$3)
+       order by a.image_role,a.created_at desc`,
+      [projectId, userId, campaignId ?? null],
     );
     return new Map(result.rows.map((asset) => [asset.imageRole, asset]));
   }
@@ -198,6 +219,10 @@ export class ExportsService {
     extension: string;
     buffer: Buffer;
   }): Promise<ExportAsset> {
+    const metadata =
+      input.mimeType === 'application/zip'
+        ? { width: 1, height: 1 }
+        : await sharp(input.buffer).metadata();
     const checksum = createHash('sha256').update(input.buffer).digest('hex');
     const existing = await this.database.client.pool.query<ExportAsset>(
       `${this.assetSelect()}
@@ -224,7 +249,7 @@ export class ExportsService {
         `insert into assets(id, project_id, owner_user_id, asset_type, image_role,
                             object_key, original_name, mime_type, width, height,
                             file_size, checksum, status)
-         values ($1,$2,$3,'export',$4,$5,$6,$7,$8,$8,$9,$10,'ready')
+         values ($1,$2,$3,'export',$4,$5,$6,$7,$8,$11,$9,$10,'ready')
          returning id, project_id as "projectId", asset_type as "assetType",
                    image_role as "imageRole", original_name as "originalName",
                    mime_type as "mimeType", width, height, file_size as "fileSize",
@@ -237,9 +262,10 @@ export class ExportsService {
           objectKey,
           input.originalName,
           input.mimeType,
-          EXPORT_SIZE,
+          metadata.width ?? 1,
           input.buffer.length,
           checksum,
+          metadata.height ?? 1,
         ],
       );
       return inserted.rows[0] as ExportAsset;

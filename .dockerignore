@@ -10,3 +10,7 @@ node_modules
 README.md
 *.log
 *.tsbuildinfo
+
+.env
+.env.*
+vendor

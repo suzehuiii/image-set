@@ -1,7 +1,9 @@
+import type { ProductBriefAnalysis, CampaignConfig } from '@image-set/shared';
 import {
   OpenAiProvider,
   resolveOpenAiProviderRouting,
   type AiProvider,
+  type AiImageAsset,
   type ConsistencyReviewInput,
   type ConsistencyReviewResult,
   type GeneratedImageResult,
@@ -17,6 +19,20 @@ export class AiProviderService implements AiProvider {
 
   analyzeProduct(input: ProductAnalysisInput): Promise<ProductAnalysisResult> {
     return this.instance('analysis').analyzeProduct(input);
+  }
+
+  analyzeBrief(input: ProductAnalysisInput) {
+    return this.instance('analysis').analyzeBrief(input);
+  }
+
+  planCampaign(input: {
+    brief: ProductBriefAnalysis;
+    config: CampaignConfig;
+    targetPlatform: string;
+    targetLocale: string;
+    referenceAssets: AiImageAsset[];
+  }) {
+    return this.instance('analysis').planCampaign(input);
   }
 
   generateImage(input: ImageGenerationInput): Promise<GeneratedImageResult> {

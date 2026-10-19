@@ -1,8 +1,13 @@
+import { AiProviderError } from '@image-set/ai-provider';
 import {
-  AiProviderError,
-  type ProductAnalysisResult,
-} from '@image-set/ai-provider';
-import { productAnalysisSchema } from '@image-set/shared';
+  projectAnalysisSchema,
+  isBrief,
+  browserLocale,
+  campaignConfigSchema,
+  validateCampaign,
+  type ProjectAnalysis,
+  type CampaignConfig,
+} from '@image-set/shared';
 import {
   BadRequestException,
   Body,
@@ -27,7 +32,7 @@ import { AuthGuard, CurrentUser, type AuthUser } from './auth.js';
 import { DatabaseService } from './database.service.js';
 
 const ANALYSIS_CREDITS = 1;
-const PROMPT_VERSION = 'product-analysis-nine-image-zh-v3';
+const PROMPT_VERSION = 'product-brief-skill-v1';
 
 type AnalysisProject = {
   id: string;
@@ -35,7 +40,7 @@ type AnalysisProject = {
   targetLocale: string;
   productCategory: string | null;
   productBrief: Record<string, unknown>;
-  analysisResult: ProductAnalysisResult | null;
+  analysisResult: ProjectAnalysis | null;
 };
 
 type JobRow = {
@@ -49,6 +54,8 @@ type JobRow = {
   creditsReserved: number;
   attemptCount: number;
   resultAssetId: string | null;
+  inputSnapshot?: { operation?: string };
+  campaignId?: string;
   progress: number;
   stage: string;
   errorCode: string | null;
@@ -63,6 +70,11 @@ export class SaveAnalysisDto {
   analysis!: Record<string, unknown>;
 }
 
+export class PlanCampaignDto {
+  @IsObject()
+  config!: Record<string, unknown>;
+}
+
 @Injectable()
 export class AnalysisService {
   constructor(
@@ -75,9 +87,18 @@ export class AnalysisService {
     userId: string,
     projectId: string,
     idempotencyKey: string | undefined,
+    language?: string,
+    config?: CampaignConfig,
   ) {
     const key = this.validateIdempotencyKey(idempotencyKey);
-    const reserved = await this.reserve(userId, projectId, key);
+    const reserved = await this.reserve(
+      userId,
+      projectId,
+      key,
+      config ? 'plan' : 'brief',
+      browserLocale(language),
+      config,
+    );
     if (reserved.existing) {
       if (
         reserved.job.status === 'succeeded' &&
@@ -101,14 +122,45 @@ export class AnalysisService {
         userId,
         projectId,
       );
-      const analysis = await this.ai.analyzeProduct({
-        projectId,
-        productAssets,
-        targetPlatform: reserved.project.targetPlatform,
-        targetLocale: reserved.project.targetLocale,
-        productCategory: reserved.project.productCategory,
-        productBrief: reserved.project.productBrief,
-      });
+      let analysis: ProjectAnalysis;
+      if (config) {
+        const brief = reserved.project.analysisResult;
+        if (
+          !brief ||
+          !isBrief(brief) ||
+          !brief.confirmed ||
+          !brief.product.confirmed
+        )
+          throw new AiProviderError(
+            'AI_INPUT_INVALID',
+            '请先保存并确认商品简报',
+          );
+        const campaign = await this.ai.planCampaign({
+          brief,
+          config,
+          targetPlatform: reserved.project.targetPlatform,
+          targetLocale: reserved.project.targetLocale,
+          referenceAssets: await this.assets.productAnalysisInputs(
+            userId,
+            projectId,
+            'reference',
+          ),
+        });
+        analysis = { ...brief, campaign };
+      } else {
+        const manual = await this.assets.manualAnalysisInput(userId, projectId);
+        analysis = await this.ai.analyzeBrief({
+          projectId,
+          productAssets,
+          targetPlatform: reserved.project.targetPlatform,
+          targetLocale: reserved.project.targetLocale,
+          productCategory: reserved.project.productCategory,
+          productBrief: reserved.project.productBrief,
+          analysisLocale: browserLocale(language),
+          manualText: manual.text,
+        });
+        if (manual.warning) analysis.warnings.push(manual.warning);
+      }
       const settled = await this.consume(
         userId,
         reserved.job.id,
@@ -135,7 +187,7 @@ export class AnalysisService {
     projectId: string,
     rawAnalysis: Record<string, unknown>,
   ) {
-    const parsed = productAnalysisSchema.safeParse(rawAnalysis);
+    const parsed = projectAnalysisSchema.safeParse(rawAnalysis);
     if (!parsed.success) {
       throw new BadRequestException({
         code: 'INVALID_ANALYSIS',
@@ -143,13 +195,72 @@ export class AnalysisService {
         details: { issues: parsed.error.issues },
       });
     }
-    const result = await this.database.client.pool.query(
-      `update projects set analysis_result = $3, status = 'ready', updated_at = now()
+    const client = await this.database.client.pool.connect();
+    try {
+      await client.query('begin');
+      await client.query('select id from users where id=$1 for update', [
+        userId,
+      ]);
+      const current = await client.query<{ analysis: unknown }>(
+        `select analysis_result as analysis from projects where id=$1 and user_id=$2 and deleted_at is null for update`,
+        [projectId, userId],
+      );
+      if (!current.rows[0]) throw new NotFoundException('项目不存在');
+      const active = await client.query(
+        `select id from generation_jobs where project_id=$1 and user_id=$2 and status in ('queued','running') limit 1`,
+        [projectId, userId],
+      );
+      if (active.rowCount)
+        throw new ConflictException('任务处理中，请完成后修改简报或方案');
+      if (isBrief(parsed.data)) {
+        const old = projectAnalysisSchema.safeParse(current.rows[0].analysis);
+        if (parsed.data.campaign) {
+          if (
+            !old.success ||
+            !isBrief(old.data) ||
+            !old.data.campaign ||
+            parsed.data.campaign.id !== old.data.campaign.id
+          )
+            throw new BadRequestException('请先由系统生成图片方案');
+          const brief = { ...parsed.data, campaign: null };
+          const previous = { ...old.data, campaign: null };
+          if (JSON.stringify(brief) !== JSON.stringify(previous))
+            parsed.data.campaign = null;
+          else {
+            const previousCampaign = old.data.campaign;
+            if (
+              JSON.stringify(parsed.data.campaign.config) !==
+                JSON.stringify(previousCampaign.config) ||
+              parsed.data.campaign.targetLocale !==
+                previousCampaign.targetLocale
+            )
+              throw new BadRequestException('配置变更后请重新策划');
+            if (!validateCampaign(parsed.data, parsed.data.campaign))
+              throw new BadRequestException('方案数量、顺序或事实引用不正确');
+            if (
+              JSON.stringify({ ...parsed.data.campaign, confirmed: false }) !==
+              JSON.stringify({ ...previousCampaign, confirmed: false })
+            )
+              parsed.data.campaign.id = randomUUID();
+          }
+        }
+        if (parsed.data.confirmed && !parsed.data.product.confirmed)
+          throw new BadRequestException('请先确认主商品身份');
+      }
+      const result = await client.query(
+        `update projects set analysis_result = $3, status = 'ready', updated_at = now()
        where id = $1 and user_id = $2 and deleted_at is null returning id`,
-      [projectId, userId, parsed.data],
-    );
-    if (result.rowCount === 0) throw new NotFoundException('项目不存在');
-    return { analysis: parsed.data };
+        [projectId, userId, parsed.data],
+      );
+      if (result.rowCount === 0) throw new NotFoundException('项目不存在');
+      await client.query('commit');
+      return { analysis: parsed.data };
+    } catch (error) {
+      await client.query('rollback');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async listJobs(userId: string, projectId: string): Promise<JobRow[]> {
@@ -158,12 +269,13 @@ export class AnalysisService {
               j.image_role as "imageRole", j.provider, j.model,
               j.result_asset_id as "resultAssetId", j.credits_reserved as "creditsReserved",
               j.attempt_count as "attemptCount", j.error_code as "errorCode",
+              j.input_snapshot->'analysis'->'campaign'->>'id' as "campaignId",
               j.progress, j.stage,
               j.error_message_safe as "errorMessageSafe", j.started_at as "startedAt",
               j.completed_at as "completedAt", j.created_at as "createdAt"
        from generation_jobs j join projects p on p.id = j.project_id
        where j.project_id = $1 and j.user_id = $2 and p.deleted_at is null
-       order by j.created_at desc limit 50`,
+       order by j.created_at desc limit 250`,
       [projectId, userId],
     );
     return result.rows;
@@ -175,6 +287,7 @@ export class AnalysisService {
               j.image_role as "imageRole", j.provider, j.model,
               j.result_asset_id as "resultAssetId", j.credits_reserved as "creditsReserved",
               j.attempt_count as "attemptCount", j.error_code as "errorCode",
+              j.input_snapshot->'analysis'->'campaign'->>'id' as "campaignId",
               j.progress, j.stage,
               j.error_message_safe as "errorMessageSafe", j.started_at as "startedAt",
               j.completed_at as "completedAt", j.created_at as "createdAt"
@@ -195,7 +308,14 @@ export class AnalysisService {
     return normalized;
   }
 
-  private async reserve(userId: string, projectId: string, key: string) {
+  private async reserve(
+    userId: string,
+    projectId: string,
+    key: string,
+    operation: string,
+    analysisLocale: string,
+    config?: CampaignConfig,
+  ) {
     const client = await this.database.client.pool.connect();
     try {
       await client.query('begin');
@@ -207,7 +327,7 @@ export class AnalysisService {
       const balance = user.rows[0]?.creditBalance;
       if (balance === undefined) throw new NotFoundException('用户不存在');
       const existing = await client.query<JobRow>(
-        `select id, project_id as "projectId", job_type as "jobType", status, provider, model,
+        `select id, input_snapshot as "inputSnapshot", project_id as "projectId", job_type as "jobType", status, provider, model,
                 credits_reserved as "creditsReserved", attempt_count as "attemptCount",
                 error_code as "errorCode", error_message_safe as "errorMessageSafe",
                 started_at as "startedAt", completed_at as "completedAt", created_at as "createdAt"
@@ -223,9 +343,25 @@ export class AnalysisService {
       );
       const project = projectResult.rows[0];
       if (!project) throw new NotFoundException('项目不存在');
+      const active = await client.query(
+        `select id from generation_jobs where project_id=$1 and user_id=$2 and status in ('queued','running') and idempotency_key<>$3 limit 1`,
+        [projectId, userId, key],
+      );
+      if (active.rowCount) throw new ConflictException('该项目已有任务执行中');
+      if (
+        operation === 'plan' &&
+        (!project.analysisResult ||
+          !isBrief(project.analysisResult) ||
+          !project.analysisResult.confirmed)
+      )
+        throw new BadRequestException('请先确认商品简报');
       const previousJob = existing.rows[0];
       if (previousJob) {
-        if (previousJob.projectId !== projectId) {
+        if (
+          previousJob.projectId !== projectId ||
+          previousJob.jobType !== 'analysis' ||
+          (previousJob.inputSnapshot?.operation ?? 'brief') !== operation
+        ) {
           throw new ConflictException('Idempotency-Key 已用于其他请求');
         }
         await client.query('commit');
@@ -275,6 +411,10 @@ export class AnalysisService {
           PROMPT_VERSION,
           key,
           {
+            operation,
+            brief: project.analysisResult,
+            analysisLocale,
+            config,
             targetPlatform: project.targetPlatform,
             targetLocale: project.targetLocale,
             productCategory: project.productCategory,
@@ -320,7 +460,7 @@ export class AnalysisService {
     userId: string,
     jobId: string,
     projectId: string,
-    analysis: ProductAnalysisResult,
+    analysis: ProjectAnalysis,
     key: string,
   ) {
     const client = await this.database.client.pool.connect();
@@ -425,8 +565,21 @@ export class AnalysisController {
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
     @Headers('idempotency-key') idempotencyKey?: string,
+    @Headers('accept-language') language?: string,
   ) {
-    return this.analysis.analyze(user.id, id, idempotencyKey);
+    return this.analysis.analyze(user.id, id, idempotencyKey, language);
+  }
+
+  @Post('projects/:id/plan')
+  plan(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Headers('idempotency-key') key: string | undefined,
+    @Body() input: PlanCampaignDto,
+  ) {
+    const parsed = campaignConfigSchema.safeParse(input.config);
+    if (!parsed.success) throw new BadRequestException('图片包配置不正确');
+    return this.analysis.analyze(user.id, id, key, undefined, parsed.data);
   }
 
   @Patch('projects/:id/content')

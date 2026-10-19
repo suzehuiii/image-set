@@ -30,7 +30,7 @@ export class CreateProjectDto {
   @Matches(/\S/, { message: 'name 不能为空' })
   name!: string;
 
-  @IsIn(['amazon_us', 'shopify', 'tiktok_shop'])
+  @IsIn(['amazon_us', 'amazon_jp', 'amazon_de', 'shopify', 'tiktok_shop'])
   targetPlatform: string = 'amazon_us';
 
   @IsOptional()
@@ -51,7 +51,7 @@ export class UpdateProjectDto {
   name?: string;
 
   @IsOptional()
-  @IsIn(['amazon_us', 'shopify', 'tiktok_shop'])
+  @IsIn(['amazon_us', 'amazon_jp', 'amazon_de', 'shopify', 'tiktok_shop'])
   targetPlatform?: string;
 
   @IsOptional()

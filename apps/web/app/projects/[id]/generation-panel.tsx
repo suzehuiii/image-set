@@ -4,12 +4,14 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   IMAGE_ROLES,
   type ImageRole,
-  type ProductAnalysisResult,
+  type ProjectAnalysis,
+  isBrief,
+  imageRatio,
 } from '@image-set/shared';
 
 import { api, type Asset, type Job } from '../../lib/api';
 
-const ROLE_LABELS: Record<ImageRole, string> = {
+const ROLE_LABELS: Partial<Record<ImageRole, string>> = {
   main: '白底主图',
   feature_1: '功能卖点图 1',
   feature_2: '功能卖点图 2',
@@ -36,38 +38,56 @@ export function GenerationPanel({
   projectId,
   creditBalance,
   analysis,
+  dirty,
   assets,
   jobs,
   onRefresh,
 }: {
   projectId: string;
   creditBalance: number;
-  analysis: ProductAnalysisResult;
+  analysis: ProjectAnalysis;
+  dirty: boolean;
   assets: Asset[];
   jobs: Job[];
   onRefresh: () => Promise<void>;
 }) {
+  const campaign = isBrief(analysis) ? analysis.campaign : null;
+  const roles: ImageRole[] = isBrief(analysis)
+    ? (campaign?.images.map((x) => x.role) ?? [])
+    : [...IMAGE_ROLES];
+  const label = (role: ImageRole) =>
+    campaign?.images.find((x) => x.role === role)?.title ??
+    ROLE_LABELS[role] ??
+    role;
+  const ready =
+    !dirty &&
+    (!isBrief(analysis) || Boolean(analysis.confirmed && campaign?.confirmed));
   const [pending, setPending] = useState(false);
   const [exporting, setExporting] = useState('');
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const imageJobs = useMemo(
-    () => jobs.filter((job) => job.jobType === 'image'),
-    [jobs],
+    () =>
+      jobs.filter(
+        (job) =>
+          job.jobType === 'image' &&
+          (campaign
+            ? job.campaignId === campaign.id
+            : !isBrief(analysis) && !job.campaignId),
+      ),
+    [jobs, campaign, analysis],
   );
   const active = imageJobs.some(
     (job) => job.status === 'queued' || job.status === 'running',
   );
-  const generatedRoles = useMemo(
-    () =>
-      new Set(
-        assets
-          .filter((asset) => asset.assetType === 'generated' && asset.imageRole)
-          .map((asset) => asset.imageRole),
-      ),
-    [assets],
+  const visibleAssets = assets.filter((asset) =>
+    imageJobs.some((job) => job.resultAssetId === asset.id),
   );
-  const completeSet = IMAGE_ROLES.every((role) => generatedRoles.has(role));
+  const completeSet =
+    roles.length > 0 &&
+    roles.every((role) =>
+      visibleAssets.some((asset) => asset.imageRole === role),
+    );
 
   useEffect(() => {
     if (!active) return;
@@ -127,7 +147,7 @@ export function GenerationPanel({
       );
       setNotice(
         role
-          ? `${ROLE_LABELS[role]}已按当前保存文案重新合成，未扣额度。`
+          ? `${label(role)}已导出，未扣额度。`
           : `${format.toUpperCase()} 整套 ZIP 已生成，未扣额度。`,
       );
       await onRefresh();
@@ -143,19 +163,25 @@ export function GenerationPanel({
     <section className="generation-section" aria-busy={active}>
       <div className="section-head generation-heading">
         <div>
-          <p className="eyebrow">NINE-IMAGE SET</p>
+          <p className="eyebrow">CAMPAIGN IMAGE SET</p>
           <h2>生成商品套图</h2>
-          <p>九张图独立执行与结算；单张失败会自动退款，不影响成功结果。</p>
+          <p>
+            每张图独立执行与结算；单张失败自动退款。直接成图的文案修改需重新生成。
+          </p>
         </div>
         <div className="generation-actions">
           <span>当前余额 {creditBalance}</span>
           <button
             type="button"
             className="primary"
-            disabled={pending || active || creditBalance < 27}
+            disabled={
+              pending || active || !ready || creditBalance < roles.length * 3
+            }
             onClick={() => create()}
           >
-            {active ? '套图生成中…' : '生成完整九图 · 27 额度'}
+            {active
+              ? '套图生成中…'
+              : `生成整套 ${roles.length} 张 · ${roles.length * 3} 额度`}
           </button>
           <div className="zip-actions">
             <button
@@ -187,33 +213,45 @@ export function GenerationPanel({
           {notice}
         </p>
       )}
+      {!ready && (
+        <p role="status">请先保存并确认商品简报和图片方案，再生成图片。</p>
+      )}
       <div className="generation-grid">
-        {IMAGE_ROLES.map((role) => {
+        {roles.map((role) => {
           const roleJobs = imageJobs.filter((job) => job.imageRole === role);
           const latest = roleJobs[0];
           const result =
-            assets.find(
+            visibleAssets.find(
               (asset) =>
                 asset.assetType === 'generated' &&
                 asset.imageRole === role &&
                 asset.id === latest?.resultAssetId,
             ) ??
-            assets.find(
+            visibleAssets.find(
               (asset) =>
                 asset.assetType === 'generated' && asset.imageRole === role,
             );
-          const copy =
-            analysis.imagePlan.find((item) => item.role === role)?.copyEn ?? '';
+          const copy = isBrief(analysis)
+            ? (campaign?.images.find((x) => x.role === role)?.copy ?? '')
+            : (analysis.imagePlan.find((item) => item.role === role)?.copyEn ??
+              '');
           return (
             <article className="generation-card" key={role}>
-              <div className="generation-preview">
+              <div
+                className="generation-preview"
+                style={{
+                  aspectRatio: campaign
+                    ? imageRatio(campaign, role).replace(':', '/')
+                    : '1',
+                }}
+              >
                 {result ? (
                   <img
                     src={`/api/assets/${result.id}/content`}
-                    alt={ROLE_LABELS[role]}
+                    alt={label(role)}
                   />
                 ) : (
-                  <span>{ROLE_LABELS[role]}</span>
+                  <span>{label(role)}</span>
                 )}
                 {latest &&
                   (latest.status === 'queued' ||
@@ -221,7 +259,7 @@ export function GenerationPanel({
                     <div
                       className="generation-progress"
                       role="progressbar"
-                      aria-label={`${ROLE_LABELS[role]}生成进度`}
+                      aria-label={`${label(role)}生成进度`}
                       aria-valuemin={0}
                       aria-valuemax={100}
                       aria-valuenow={latest.progress}
@@ -233,7 +271,7 @@ export function GenerationPanel({
               </div>
               <div className="generation-card-body">
                 <div className="generation-title">
-                  <h3>{ROLE_LABELS[role]}</h3>
+                  <h3>{label(role)}</h3>
                   <span className={`job-status ${latest?.status ?? 'empty'}`}>
                     {latest?.status === 'succeeded'
                       ? '完成'
@@ -272,8 +310,8 @@ export function GenerationPanel({
                 )}
                 {result && role !== 'main' && (
                   <p className="export-copy">
-                    <strong>导出文案</strong>
-                    {copy || '未填写英文文案，将导出无文字视觉。'}
+                    <strong>图片文案</strong>
+                    {copy || '无额外营销文案。'}
                   </p>
                 )}
                 <div className="generation-card-actions">
@@ -281,7 +319,9 @@ export function GenerationPanel({
                     <button
                       type="button"
                       className="ghost"
-                      disabled={pending || creditBalance < 3}
+                      disabled={
+                        pending || active || !ready || creditBalance < 3
+                      }
                       onClick={() => retry(latest.id)}
                     >
                       重试 · 3 额度
@@ -290,7 +330,9 @@ export function GenerationPanel({
                     <button
                       type="button"
                       className="ghost"
-                      disabled={pending || active || creditBalance < 3}
+                      disabled={
+                        pending || active || !ready || creditBalance < 3
+                      }
                       onClick={() => create(role)}
                     >
                       {result ? '重新生成 · 3 额度' : '单张生成 · 3 额度'}
@@ -305,9 +347,7 @@ export function GenerationPanel({
                       disabled={Boolean(exporting)}
                       onClick={() => exportImages('png', role)}
                     >
-                      {exporting === `${role}-png`
-                        ? '合成中…'
-                        : '合成并下载 PNG'}
+                      {exporting === `${role}-png` ? '导出中…' : '下载 PNG'}
                     </button>
                     <button
                       type="button"
@@ -315,9 +355,7 @@ export function GenerationPanel({
                       disabled={Boolean(exporting)}
                       onClick={() => exportImages('jpg', role)}
                     >
-                      {exporting === `${role}-jpg`
-                        ? '合成中…'
-                        : '合成并下载 JPG'}
+                      {exporting === `${role}-jpg` ? '导出中…' : '下载 JPG'}
                     </button>
                   </div>
                 )}

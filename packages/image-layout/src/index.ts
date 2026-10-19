@@ -21,6 +21,9 @@ export type RenderExportImageInput = {
   role: ImageRole;
   copy: string;
   format: ExportImageFormat;
+  direct?: boolean;
+  width?: number;
+  height?: number;
 };
 
 export function getDefaultLayout(role: ImageRole): ImageLayout {
@@ -41,7 +44,7 @@ const PLATFORM_RULES: Record<string, string> = {
     'TikTok Shop：采用清晰、移动端优先的构图，让商品可以被立即识别，不得出现缺乏依据的性能或认证声明。',
 };
 
-const ROLE_DIRECTIONS: Record<ImageRole, string> = {
+const ROLE_DIRECTIONS: Partial<Record<ImageRole, string>> = {
   main: '生成干净的纯白背景商品主图。不得出现文字、图形、道具、手、额外包装或装饰性场景。',
   feature_1:
     '功能卖点图 1：突出最核心且证据最充分的购买理由，商品保持大面积主体，并为标题留出负空间。',
@@ -165,8 +168,13 @@ export async function renderExportImage(
   let image = sharp(input.source)
     .rotate()
     .flatten({ background: '#ffffff' })
-    .resize(EXPORT_SIZE, EXPORT_SIZE, { fit: 'cover', position: 'centre' });
-  const overlay = buildMarketingOverlay(input.role, input.copy);
+    .resize(input.width ?? EXPORT_SIZE, input.height ?? EXPORT_SIZE, {
+      fit: 'cover',
+      position: 'centre',
+    });
+  const overlay = input.direct
+    ? undefined
+    : buildMarketingOverlay(input.role, input.copy);
   if (overlay) image = image.composite([{ input: overlay }]);
   return input.format === 'png'
     ? image.png({ compressionLevel: 9, adaptiveFiltering: true }).toBuffer()

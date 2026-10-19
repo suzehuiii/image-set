@@ -103,4 +103,34 @@ describe('default image layout', () => {
     });
     expect(feature.equals(main)).toBe(false);
   });
+  it('exports a direct portrait without adding the legacy text overlay', async () => {
+    const source = await sharp({
+      create: { width: 136, height: 204, channels: 3, background: '#ffffff' },
+    })
+      .png()
+      .toBuffer();
+    const first = await renderExportImage({
+      source,
+      role: 'pdp_1',
+      copy: 'Must not be added',
+      format: 'png',
+      direct: true,
+      width: 1360,
+      height: 2040,
+    });
+    const second = await renderExportImage({
+      source,
+      role: 'pdp_1',
+      copy: 'Different copy',
+      format: 'png',
+      direct: true,
+      width: 1360,
+      height: 2040,
+    });
+    expect(first.equals(second)).toBe(true);
+    expect(await sharp(first).metadata()).toMatchObject({
+      width: 1360,
+      height: 2040,
+    });
+  });
 });
