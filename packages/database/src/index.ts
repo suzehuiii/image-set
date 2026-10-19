@@ -199,6 +199,23 @@ export async function migrateDatabase(pool: Pool): Promise<void> {
       `);
       await client.query('insert into schema_migrations(version) values (5)');
     }
+    const versionSix = await client.query(
+      'select version from schema_migrations where version = 6',
+    );
+    if (versionSix.rowCount === 0) {
+      await client.query(`
+        alter table users alter column credit_balance set default 500;
+        with topped_up as (
+          update users set credit_balance = credit_balance + 450, updated_at = now()
+          returning id, credit_balance
+        )
+        insert into credit_ledger(id, user_id, entry_type, delta, balance_after, idempotency_key, description)
+        select gen_random_uuid(), id, 'grant', 450, credit_balance,
+               'm6-testing-grant:' || id::text, '测试额度升级补赠（50 → 500，保留已消费额度）'
+        from topped_up;
+      `);
+      await client.query('insert into schema_migrations(version) values (6)');
+    }
     await client.query('commit');
   } catch (error) {
     await client.query('rollback');

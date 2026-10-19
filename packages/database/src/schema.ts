@@ -17,7 +17,7 @@ export const users = pgTable(
     email: varchar({ length: 320 }).notNull(),
     passwordHash: varchar('password_hash').notNull(),
     displayName: varchar('display_name', { length: 80 }).notNull(),
-    creditBalance: integer('credit_balance').notNull().default(50),
+    creditBalance: integer('credit_balance').notNull().default(500),
     status: varchar({ length: 20 }).notNull().default('active'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
