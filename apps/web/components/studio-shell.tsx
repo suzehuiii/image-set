@@ -11,6 +11,7 @@ import {
   LayoutGrid,
   LogOut,
   Menu,
+  MoreHorizontal,
   Plus,
   Sparkles,
   X,
@@ -32,6 +33,7 @@ export function StudioShell({
   const [recent, setRecent] = useState<Project[]>([]);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState('');
+  const [profileOpen, setProfileOpen] = useState(false);
   useEffect(() => {
     if (suppliedProjects) return;
     api<{ items: Project[] }>('/projects')
@@ -116,29 +118,53 @@ export function StudioShell({
                 <span>可用额度</span>
                 <strong>{user.creditBalance}</strong>
               </div>
-              <div className="profile-row">
-                <span className="avatar">
-                  {user.displayName.slice(0, 1).toUpperCase()}
-                </span>
-                <span className="profile-name">
-                  {user.displayName}
-                  <small>个人工作空间</small>
-                </span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="退出登录"
-                  onClick={async () => {
-                    try {
-                      await api('/auth/logout', { method: 'POST', body: '{}' });
-                      router.push('/login');
-                    } catch (e) {
-                      setError(e instanceof Error ? e.message : '退出失败');
-                    }
-                  }}
-                >
-                  <LogOut />
-                </Button>
+              <div className="profile-menu-wrap">
+                {profileOpen && (
+                  <div className="profile-menu" role="menu">
+                    <Link
+                      href="/account/redeem"
+                      role="menuitem"
+                      onClick={() => setProfileOpen(false)}
+                    >
+                      <Coins size={16} /> 额度兑换
+                    </Link>
+                    <Button
+                      variant="ghost"
+                      role="menuitem"
+                      onClick={async () => {
+                        try {
+                          await api('/auth/logout', {
+                            method: 'POST',
+                            body: '{}',
+                          });
+                          router.push('/login');
+                        } catch (e) {
+                          setError(e instanceof Error ? e.message : '退出失败');
+                        }
+                      }}
+                    >
+                      <LogOut size={16} /> 退出登录
+                    </Button>
+                  </div>
+                )}
+                <div className="profile-row">
+                  <span className="avatar">
+                    {user.displayName.slice(0, 1).toUpperCase()}
+                  </span>
+                  <span className="profile-name">
+                    {user.displayName}
+                    <small>个人工作空间</small>
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="账号菜单"
+                    aria-expanded={profileOpen}
+                    onClick={() => setProfileOpen((value) => !value)}
+                  >
+                    <MoreHorizontal />
+                  </Button>
+                </div>
               </div>
             </>
           )}

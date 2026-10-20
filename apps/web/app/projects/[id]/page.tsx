@@ -26,6 +26,7 @@ import {
 import { StudioShell } from '@/components/studio-shell';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
   ArrowLeft,
@@ -141,6 +142,30 @@ export default function ProjectPage() {
       router.push('/');
     } catch (e) {
       setError(e instanceof Error ? e.message : '删除失败');
+    }
+  }
+  async function setReferenceContentEnabled(enabled: boolean) {
+    if (!project) return;
+    setError('');
+    const productBrief = {
+      ...project.productBrief,
+      referenceContentEnabled: enabled,
+    };
+    setProject({ ...project, productBrief });
+    try {
+      const updated = await api<Project>(`/projects/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ productBrief }),
+      });
+      setProject(updated);
+      setNotice(
+        enabled
+          ? '已开启参考图内容借鉴；下次分析和策划生效。'
+          : '已关闭参考图内容借鉴。',
+      );
+    } catch (caught) {
+      setProject(project);
+      setError(caught instanceof Error ? caught.message : '保存参考设置失败');
     }
   }
   async function analyzeProduct() {
@@ -339,12 +364,16 @@ export default function ProjectPage() {
                   />
                   <UploadGroup
                     title="风格参考图"
-                    hint={`可选，最多 ${REFERENCE_ASSET_LIMIT} 张，支持 AVIF；仅参考风格与构图`}
+                    hint={`可选，最多 ${REFERENCE_ASSET_LIMIT} 张，支持 AVIF；默认参考风格与构图`}
                     type="reference"
                     assets={assets}
                     uploading={uploading}
                     onUpload={upload}
                     onRemove={remove}
+                    referenceContentEnabled={
+                      project?.productBrief.referenceContentEnabled === true
+                    }
+                    onReferenceContentChange={setReferenceContentEnabled}
                   />
                   <UploadGroup
                     title="产品说明书"
@@ -598,6 +627,8 @@ function UploadGroup({
   uploading,
   onUpload,
   onRemove,
+  referenceContentEnabled,
+  onReferenceContentChange,
 }: {
   title: string;
   hint: string;
@@ -606,6 +637,8 @@ function UploadGroup({
   uploading: boolean;
   onUpload: (files: File[], type: UploadAssetType) => Promise<void>;
   onRemove: (id: string) => void;
+  referenceContentEnabled?: boolean;
+  onReferenceContentChange?: (enabled: boolean) => void;
 }) {
   const [dragging, setDragging] = useState(false);
   const filtered = assets.filter((asset) => asset.assetType === type);
@@ -641,6 +674,22 @@ function UploadGroup({
           <p>{hint}</p>
         </div>
       </div>
+      {type === 'reference' && (
+        <label className="reference-content-option">
+          <Checkbox
+            checked={referenceContentEnabled}
+            onCheckedChange={(checked) =>
+              onReferenceContentChange?.(checked === true)
+            }
+          />
+          <span>
+            <strong>同时参考图片内容</strong>
+            <small>
+              借鉴展示信息、工作状态与功能特效的表达，并扩展为待确认的商品简报建议。
+            </small>
+          </span>
+        </label>
+      )}
       <label
         className={`upload-dropzone${dragging ? ' dragging' : ''}${disabled ? ' disabled' : ''}${uploading ? ' uploading' : ''}`}
         onDragEnter={(event) => {

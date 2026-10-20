@@ -145,10 +145,14 @@ export class AnalysisService {
             projectId,
             'reference',
           ),
+          referenceContentEnabled:
+            reserved.project.productBrief.referenceContentEnabled === true,
         });
         analysis = { ...brief, campaign };
       } else {
         const manual = await this.assets.manualAnalysisInput(userId, projectId);
+        const referenceContentEnabled =
+          reserved.project.productBrief.referenceContentEnabled === true;
         analysis = await this.ai.analyzeBrief({
           projectId,
           productAssets,
@@ -158,6 +162,14 @@ export class AnalysisService {
           productBrief: reserved.project.productBrief,
           analysisLocale: browserLocale(language),
           manualText: manual.text,
+          referenceContentEnabled,
+          referenceAssets: referenceContentEnabled
+            ? await this.assets.productAnalysisInputs(
+                userId,
+                projectId,
+                'reference',
+              )
+            : [],
         });
         if (manual.warning) analysis.warnings.push(manual.warning);
       }

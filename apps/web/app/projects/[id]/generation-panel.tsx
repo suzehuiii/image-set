@@ -208,7 +208,6 @@ export function GenerationPanel({
           <Button
             disabled={
               pending ||
-              active ||
               !ready ||
               !roles.length ||
               creditBalance < roles.length * 3
@@ -216,9 +215,7 @@ export function GenerationPanel({
             onClick={() => create()}
           >
             <Sparkles size={16} />
-            {active
-              ? '图片生成中…'
-              : `生成整套 ${roles.length} 张 · ${roles.length * 3} 额度`}
+            {`生成整套 ${roles.length} 张 · ${roles.length * 3} 额度`}
           </Button>
           <DownloadDialog
             projectId={projectId}
@@ -402,9 +399,7 @@ export function GenerationPanel({
                       <div className="generation-card-actions">
                         <Button
                           variant="outline"
-                          disabled={
-                            pending || active || !ready || creditBalance < 3
-                          }
+                          disabled={pending || !ready || creditBalance < 3}
                           onClick={() =>
                             create(
                               role,
@@ -423,9 +418,7 @@ export function GenerationPanel({
                     {result && latest?.status === 'failed' && (
                       <Button
                         variant="outline"
-                        disabled={
-                          pending || active || !ready || creditBalance < 3
-                        }
+                        disabled={pending || !ready || creditBalance < 3}
                         onClick={() => create(role, latest.id)}
                       >
                         重试失败任务 · 3 额度

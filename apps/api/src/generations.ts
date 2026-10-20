@@ -278,12 +278,6 @@ export class GenerationsService {
           'select id from projects where id=$1 and user_id=$2 and deleted_at is null for update',
           [previous.projectId, userId],
         );
-        const active = await client.query(
-          "select id from generation_jobs where project_id=$1 and user_id=$2 and status in ('queued','running') limit 1",
-          [previous.projectId, userId],
-        );
-        if (active.rowCount)
-          throw new ConflictException('该项目已有任务执行中');
         if (balance < IMAGE_CREDITS) throw new ConflictException('额度不足');
         const parsed = generationSnapshotSchema.parse(previous.inputSnapshot);
         const snapshot: GenerationSnapshot = {
@@ -397,11 +391,6 @@ export class GenerationsService {
           throw new BadRequestException('图片槽位不属于当前方案');
       } else if (roles.some((role) => !IMAGE_ROLES.some((x) => x === role)))
         throw new BadRequestException('图片槽位不属于旧版九图');
-      const active = await client.query(
-        `select id from generation_jobs where project_id=$1 and user_id=$2 and status in ('queued','running') limit 1`,
-        [projectId, userId],
-      );
-      if (active.rowCount) throw new ConflictException('该项目已有任务执行中');
       const assets = await client.query<{
         id: string;
         assetType: 'product' | 'reference';

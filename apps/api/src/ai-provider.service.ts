@@ -31,6 +31,7 @@ export class AiProviderService implements AiProvider {
     targetPlatform: string;
     targetLocale: string;
     referenceAssets: AiImageAsset[];
+    referenceContentEnabled?: boolean;
   }) {
     return this.instance('analysis').planCampaign(input);
   }

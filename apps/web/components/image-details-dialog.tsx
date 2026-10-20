@@ -300,7 +300,6 @@ export function ImageDetailsDialog({
                 <Button
                   disabled={
                     pending ||
-                    active ||
                     !details ||
                     !prompt.trim() ||
                     prompt.length > 30000 ||
@@ -318,7 +317,7 @@ export function ImageDetailsDialog({
                 <DownloadDialog projectId={projectId} asset={asset} />
                 <small>
                   {active
-                    ? '当前项目任务执行中，请等待完成。'
+                    ? '已有任务在队列中，新任务会按并发上限继续处理。'
                     : '原图保留；生成失败退回对应额度。'}
                 </small>
               </footer>

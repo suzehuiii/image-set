@@ -223,6 +223,18 @@ describe('image prompt regeneration', () => {
     ).toHaveLength(1);
   });
 
+  it('accepts a new image task while another project task is active', async () => {
+    const harness = generationHarness({ active: true });
+    const result = await harness.service.retry(
+      'owner',
+      jobId,
+      'parallel-regeneration-key',
+      'Use a side angle',
+    );
+    expect(result.creditBalance).toBe(97);
+    expect(harness.enqueue).toHaveBeenCalledTimes(1);
+  });
+
   it('replays identical idempotency keys without a second reservation and rejects changed prompts', async () => {
     const same = generationHarness({ duplicatePrompt: 'Softer light' });
     await same.service.retry(
@@ -245,12 +257,8 @@ describe('image prompt regeneration', () => {
     expect(changed.writes).toHaveLength(0);
   });
 
-  it('rejects unavailable source records, active projects and insufficient credits before writing', async () => {
-    for (const options of [
-      { missing: true },
-      { active: true },
-      { balance: 2 },
-    ]) {
+  it('rejects unavailable source records and insufficient credits before writing', async () => {
+    for (const options of [{ missing: true }, { balance: 2 }]) {
       const harness = generationHarness(options);
       await expect(
         harness.service.retry(

@@ -63,6 +63,23 @@ describe('skill provider', () => {
     expect(result.campaign).toBeNull();
     expect(JSON.stringify(parse.mock.calls[0]?.[0])).toContain('ja-JP');
   });
+  it('uses reference content only when the project opt-in is enabled', async () => {
+    const parse = vi.fn().mockResolvedValue({ output_parsed: brief });
+    const provider = new OpenAiProvider('test', {}, { responses: { parse } });
+    await provider.analyzeBrief({
+      projectId: 'p',
+      productAssets: [{ mimeType: 'image/png', base64Data: 'cHJvZHVjdA==' }],
+      referenceAssets: [{ mimeType: 'image/png', base64Data: 'cmVmZXJlbmNl' }],
+      referenceContentEnabled: true,
+      productCategory: null,
+      productBrief: {},
+      targetPlatform: 'amazon_us',
+      targetLocale: 'en-US',
+    });
+    const request = JSON.stringify(parse.mock.calls[0]?.[0]);
+    expect(request).toContain('参考图启发，需确认');
+    expect(request).toContain('cmVmZXJlbmNl');
+  });
   it('plans with references and injects real templates', async () => {
     const parse = vi.fn().mockResolvedValue({ output_parsed: output });
     const provider = new OpenAiProvider('test', {}, { responses: { parse } });
