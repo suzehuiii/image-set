@@ -79,6 +79,7 @@ export function classifyRateLimit(
   }
   if (
     /^\/api\/projects\/[^/]+\/generations$/.test(path) ||
+    /^\/api\/assets\/[^/]+\/regenerations$/.test(path) ||
     /^\/api\/jobs\/[^/]+\/retry$/.test(path)
   ) {
     return {

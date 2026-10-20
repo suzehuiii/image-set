@@ -355,6 +355,8 @@ export const generationSnapshotSchema = z.object({
   referenceAssetIds: z.array(z.uuid()).max(4),
   requestType: z.enum(['full_set', 'regenerate', 'retry']),
   sourceJobId: z.uuid().optional(),
+  promptOverride: z.string().trim().min(1).max(30000).optional(),
+  resolvedPrompt: z.string().min(1).max(100000).optional(),
 });
 
 export type GenerationSnapshot = z.infer<typeof generationSnapshotSchema>;

@@ -91,20 +91,22 @@ export class ImageGenerationRuntime
       await this.progress(runtimeJob.id, 30, 'generating');
       const generated = await this.ai('image').generateImage({
         role: snapshot.role,
-        prompt: isBrief(snapshot.analysis)
-          ? buildCampaignPrompt(
-              snapshot.analysis,
-              snapshot.role,
-              snapshot.targetPlatform,
-            )
-          : buildImagePrompt({
-              role: snapshot.role,
-              targetPlatform: snapshot.targetPlatform,
-              targetLocale: snapshot.targetLocale,
-              analysis: snapshot.analysis,
-              productReferenceCount: productAssets.length,
-              styleReferenceCount: referenceAssets.length,
-            }),
+        prompt:
+          snapshot.resolvedPrompt ??
+          (isBrief(snapshot.analysis)
+            ? buildCampaignPrompt(
+                snapshot.analysis,
+                snapshot.role,
+                snapshot.targetPlatform,
+              )
+            : buildImagePrompt({
+                role: snapshot.role,
+                targetPlatform: snapshot.targetPlatform,
+                targetLocale: snapshot.targetLocale,
+                analysis: snapshot.analysis,
+                productReferenceCount: productAssets.length,
+                styleReferenceCount: referenceAssets.length,
+              })),
         aspectRatio:
           isBrief(snapshot.analysis) && snapshot.analysis.campaign
             ? imageRatio(snapshot.analysis.campaign, snapshot.role)
@@ -153,11 +155,13 @@ export class ImageGenerationRuntime
         productBrief: isBrief(snapshot.analysis)
           ? { ...snapshot.productBrief, brief: snapshot.analysis }
           : snapshot.productBrief,
-        expectedCopy: isBrief(snapshot.analysis)
-          ? snapshot.analysis.campaign?.images.find(
-              (x) => x.role === snapshot.role,
-            )?.copy
-          : undefined,
+        requestedPrompt: snapshot.promptOverride,
+        expectedCopy:
+          !snapshot.promptOverride && isBrief(snapshot.analysis)
+            ? snapshot.analysis.campaign?.images.find(
+                (x) => x.role === snapshot.role,
+              )?.copy
+            : undefined,
         targetLocale: isBrief(snapshot.analysis)
           ? snapshot.analysis.campaign?.targetLocale
           : snapshot.targetLocale,

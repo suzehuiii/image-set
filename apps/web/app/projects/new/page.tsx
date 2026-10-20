@@ -1,4 +1,7 @@
 'use client';
+import { Textarea } from '@/components/ui/textarea';
+import { Select } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -56,7 +59,7 @@ export default function NewProjectPage() {
           <div className="field-grid">
             <label>
               项目名称
-              <input
+              <Input
                 name="name"
                 required
                 maxLength={120}
@@ -65,18 +68,18 @@ export default function NewProjectPage() {
             </label>
             <label>
               目标平台
-              <select name="targetPlatform">
+              <Select name="targetPlatform">
                 <option value="amazon_us">Amazon US</option>
                 <option value="amazon_jp">Amazon Japan</option>
                 <option value="amazon_de">Amazon Germany</option>
                 <option value="shopify">Shopify</option>
                 <option value="tiktok_shop">TikTok Shop</option>
-              </select>
+              </Select>
             </label>
           </div>
           <label>
             商品品类
-            <input
+            <Input
               name="productCategory"
               maxLength={100}
               placeholder="例如：Drinkware"
@@ -84,20 +87,20 @@ export default function NewProjectPage() {
           </label>
           <label>
             规格与材质
-            <textarea name="specifications" rows={3} />
+            <Textarea name="specifications" rows={3} />
           </label>
           <label>
             真实卖点
-            <textarea name="sellingPoints" rows={3} />
+            <Textarea name="sellingPoints" rows={3} />
           </label>
           <div className="field-grid">
             <label>
               目标人群
-              <input name="audience" />
+              <Input name="audience" />
             </label>
             <label>
               额外要求
-              <input name="requirements" />
+              <Input name="requirements" />
             </label>
           </div>
           {error && (

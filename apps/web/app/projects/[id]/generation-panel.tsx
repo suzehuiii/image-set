@@ -13,12 +13,16 @@ import { api, type Asset, type Job } from '../../lib/api';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/dialog';
-import { ArrowLeft, ArrowRight, Expand, Images } from 'lucide-react';
+  Expand,
+  Images,
+  ShieldCheck,
+  TriangleAlert,
+  MessageSquareText,
+  Code2,
+  Sparkles,
+} from 'lucide-react';
+import { ImageDetailsDialog } from '@/components/image-details-dialog';
+import { DownloadDialog } from '@/components/download-dialog';
 
 const ROLE_LABELS: Partial<Record<ImageRole, string>> = {
   main: '白底主图',
@@ -74,9 +78,8 @@ export function GenerationPanel({
   const [pending, setPending] = useState(false);
   const [filter, setFilter] = useState('gallery');
   const [preview, setPreview] = useState<Asset | null>(null);
-  const [exporting, setExporting] = useState('');
+  const [detailTab, setDetailTab] = useState('prompt');
   const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
   const imageJobs = useMemo(
     () =>
       jobs.filter(
@@ -88,7 +91,8 @@ export function GenerationPanel({
       ),
     [jobs, campaign, analysis],
   );
-  const active = imageJobs.some(
+  // Historical prompt regenerations also need progress polling.
+  const active = jobs.some(
     (job) => job.status === 'queued' || job.status === 'running',
   );
   const visibleAssets = assets.filter((asset) =>
@@ -99,127 +103,128 @@ export function GenerationPanel({
     roles.every((role) =>
       visibleAssets.some((asset) => asset.imageRole === role),
     );
-
+  const history = assets.filter((asset) => asset.assetType === 'generated');
   useEffect(() => {
     if (!active) return;
     const timer = window.setInterval(() => {
-      void onRefresh().catch((caught: unknown) => {
-        setError(
-          caught instanceof Error ? caught.message : '刷新进度失败，请稍后重试',
-        );
-      });
-    }, 2_000);
+      void onRefresh().catch((e: unknown) =>
+        setError(e instanceof Error ? e.message : '刷新失败'),
+      );
+    }, 2000);
     return () => window.clearInterval(timer);
   }, [active, onRefresh]);
-
-  async function create(role?: ImageRole) {
+  async function create(role?: ImageRole, retryId?: string) {
     setPending(true);
     setError('');
-    setNotice('');
     try {
-      await api(`/projects/${projectId}/generations`, {
-        method: 'POST',
-        headers: { 'Idempotency-Key': crypto.randomUUID() },
-        body: JSON.stringify(role ? { role } : {}),
-      });
-      await onRefresh();
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : '创建任务失败');
-    } finally {
-      setPending(false);
-    }
-  }
-
-  async function retry(jobId: string) {
-    setPending(true);
-    setError('');
-    setNotice('');
-    try {
-      await api(`/jobs/${jobId}/retry`, {
-        method: 'POST',
-        headers: { 'Idempotency-Key': crypto.randomUUID() },
-      });
-      await onRefresh();
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : '重试失败');
-    } finally {
-      setPending(false);
-    }
-  }
-
-  async function exportImages(format: 'png' | 'jpg', role?: ImageRole) {
-    const exportKey = `${role ?? 'set'}-${format}`;
-    setExporting(exportKey);
-    setError('');
-    setNotice('');
-    try {
-      const result = await api<{ asset: Asset; bundle: boolean }>(
-        `/projects/${projectId}/exports`,
+      await api(
+        retryId
+          ? `/jobs/${retryId}/retry`
+          : `/projects/${projectId}/generations`,
         {
           method: 'POST',
-          body: JSON.stringify({ format, ...(role ? { role } : {}) }),
+          headers: { 'Idempotency-Key': crypto.randomUUID() },
+          ...(retryId ? {} : { body: JSON.stringify(role ? { role } : {}) }),
         },
       );
-      setNotice(
-        role
-          ? `${label(role)}已导出，未扣额度。`
-          : `${format.toUpperCase()} 整套 ZIP 已生成，未扣额度。`,
-      );
       await onRefresh();
-      window.location.assign(`/api/assets/${result.asset.id}/download`);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : '导出失败');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '创建任务失败');
     } finally {
-      setExporting('');
+      setPending(false);
     }
   }
-
+  function indicators(asset: Asset, copy: boolean) {
+    return (
+      <div className="image-indicators">
+        <Button
+          variant="ghost"
+          size="icon"
+          className={
+            'image-indicator ' +
+            (asset.qaResult?.status === 'passed' ? 'passed' : 'review')
+          }
+          aria-label={
+            asset.qaResult?.status === 'passed'
+              ? '查看审核：一致性检查通过'
+              : '查看审核：需要人工复核或暂无记录'
+          }
+          title={
+            asset.qaResult?.status === 'passed'
+              ? '一致性通过，点击查看详情'
+              : '点击查看审核详情'
+          }
+          onClick={() => {
+            setDetailTab('review');
+            setPreview(asset);
+          }}
+        >
+          {asset.qaResult?.status === 'passed' ? (
+            <ShieldCheck />
+          ) : (
+            <TriangleAlert />
+          )}
+        </Button>
+        {copy && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="image-indicator"
+            title="查看图片文案"
+            aria-label="查看图片文案"
+            onClick={() => {
+              setDetailTab('copy');
+              setPreview(asset);
+            }}
+          >
+            <MessageSquareText />
+          </Button>
+        )}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="image-indicator"
+          title="查看与编辑 Prompt"
+          aria-label="查看与编辑 Prompt"
+          onClick={() => {
+            setDetailTab('prompt');
+            setPreview(asset);
+          }}
+        >
+          <Code2 />
+        </Button>
+      </div>
+    );
+  }
   return (
     <section className="generation-section" aria-busy={active}>
       <div className="section-head generation-heading">
         <div>
           <p className="eyebrow">CAMPAIGN IMAGE SET</p>
           <h2>你的商品套图</h2>
-          <p>
-            每张图独立执行与结算；单张失败自动退款。直接成图的文案修改需重新生成。
-          </p>
+          <p>点击图片查看大图、审核与文案，也可以修改 Prompt 单张重新生成。</p>
         </div>
         <div className="generation-actions">
-          <span>当前余额 {creditBalance}</span>
-          <button
-            type="button"
-            className="primary"
+          <Button
             disabled={
               pending ||
               active ||
               !ready ||
-              roles.length === 0 ||
+              !roles.length ||
               creditBalance < roles.length * 3
             }
             onClick={() => create()}
           >
+            <Sparkles size={16} />
             {active
-              ? '套图生成中…'
+              ? '图片生成中…'
               : `生成整套 ${roles.length} 张 · ${roles.length * 3} 额度`}
-          </button>
-          <div className="zip-actions">
-            <button
-              type="button"
-              className="ghost"
-              disabled={!completeSet || Boolean(exporting)}
-              onClick={() => exportImages('png')}
-            >
-              {exporting === 'set-png' ? '打包中…' : 'PNG 整套 ZIP'}
-            </button>
-            <button
-              type="button"
-              className="ghost"
-              disabled={!completeSet || Boolean(exporting)}
-              onClick={() => exportImages('jpg')}
-            >
-              {exporting === 'set-jpg' ? '打包中…' : 'JPG 整套 ZIP'}
-            </button>
-          </div>
+          </Button>
+          <DownloadDialog
+            projectId={projectId}
+            disabled={!completeSet}
+            label="下载整套"
+          />
         </div>
       </div>
       {error && (
@@ -227,13 +232,10 @@ export function GenerationPanel({
           {error}
         </p>
       )}
-      {notice && (
-        <p className="success banner" role="status">
-          {notice}
-        </p>
-      )}
       {!ready && (
-        <p role="status">请先保存并确认商品简报和图片方案，再生成图片。</p>
+        <p className="detail-hint" role="status">
+          请先保存并确认商品简报和图片方案，再生成图片。
+        </p>
       )}
       <Tabs value={filter} onValueChange={setFilter} className="result-tabs">
         <TabsList aria-label="图片分组">
@@ -264,33 +266,37 @@ export function GenerationPanel({
       </Tabs>
       {filter === 'history' ? (
         <div className="history-grid">
-          {assets
-            .filter((a) => a.assetType === 'generated')
-            .map((asset) => (
-              <article key={asset.id}>
-                <button
-                  className="history-preview"
-                  onClick={() => setPreview(asset)}
-                  aria-label={'预览历史图片 ' + asset.originalName}
-                >
-                  <img
-                    src={'/api/assets/' + asset.id + '/content'}
-                    alt={asset.originalName}
-                  />
-                </button>
-                <p>
-                  {asset.imageRole} · {asset.width} × {asset.height}
-                </p>
-                <a href={'/api/assets/' + asset.id + '/download'}>
-                  下载历史原图 ↗
-                </a>
-              </article>
-            ))}
-          {!assets.some((a) => a.assetType === 'generated') && (
-            <p className="studio-note">
-              还没有生成历史。成功生成的图片会保留在这里。
-            </p>
-          )}
+          {history.map((asset) => (
+            <article key={asset.id}>
+              <Button
+                variant="ghost"
+                className="image-open history-preview"
+                onClick={() => setPreview(asset)}
+                aria-label={'查看历史图片 ' + asset.originalName}
+              >
+                <img
+                  src={`/api/assets/${asset.id}/content`}
+                  alt={asset.originalName}
+                />
+              </Button>
+              <p>
+                {asset.imageRole} · {asset.width} × {asset.height}
+              </p>
+              <div className="image-card-footer">
+                {indicators(
+                  asset,
+                  asset.imageRole !== 'main' && asset.imageRole !== 'gallery_1',
+                )}
+                <DownloadDialog
+                  projectId={projectId}
+                  asset={asset}
+                  label="下载"
+                  variant="ghost"
+                />
+              </div>
+            </article>
+          ))}
+          {!history.length && <p className="studio-note">还没有生成历史。</p>}
         </div>
       ) : (
         <div className="generation-grid">
@@ -303,25 +309,13 @@ export function GenerationPanel({
                   : role.startsWith('gallery_')),
             )
             .map((role) => {
-              const roleJobs = imageJobs.filter(
-                (job) => job.imageRole === role,
-              );
-              const latest = roleJobs[0];
+              const latest = imageJobs.find((job) => job.imageRole === role);
               const result =
                 visibleAssets.find(
-                  (asset) =>
-                    asset.assetType === 'generated' &&
-                    asset.imageRole === role &&
-                    asset.id === latest?.resultAssetId,
-                ) ??
-                visibleAssets.find(
-                  (asset) =>
-                    asset.assetType === 'generated' && asset.imageRole === role,
-                );
-              const copy = isBrief(analysis)
-                ? (campaign?.images.find((x) => x.role === role)?.copy ?? '')
-                : (analysis.imagePlan.find((item) => item.role === role)
-                    ?.copyEn ?? '');
+                  (asset) => asset.id === latest?.resultAssetId,
+                ) ?? visibleAssets.find((asset) => asset.imageRole === role);
+              const processing =
+                latest?.status === 'queued' || latest?.status === 'running';
               return (
                 <article className="generation-card" key={role}>
                   <div
@@ -333,10 +327,21 @@ export function GenerationPanel({
                     }}
                   >
                     {result ? (
-                      <img
-                        src={`/api/assets/${result.id}/content`}
-                        alt={label(role)}
-                      />
+                      <Button
+                        variant="ghost"
+                        className="image-open"
+                        aria-label={'查看大图 ' + label(role)}
+                        onClick={() => setPreview(result)}
+                      >
+                        <img
+                          src={`/api/assets/${result.id}/content`}
+                          alt={label(role)}
+                        />
+                        <span className="image-open-hint">
+                          <Expand size={16} />
+                          查看详情
+                        </span>
+                      </Button>
                     ) : (
                       <span className="image-placeholder">
                         <Images size={28} strokeWidth={1} />
@@ -344,32 +349,21 @@ export function GenerationPanel({
                         <small>等待生成</small>
                       </span>
                     )}
-                    {result && (
-                      <button
-                        className="expand-image"
-                        aria-label={`放大预览 ${label(role)}`}
-                        onClick={() => setPreview(result)}
+                    {processing && (
+                      <div
+                        className="generation-progress"
+                        role="progressbar"
+                        aria-label={label(role) + '生成进度'}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={latest.progress}
                       >
-                        <Expand size={16} />
-                      </button>
+                        <strong>{latest.progress}%</strong>
+                        <span>
+                          {STAGE_LABELS[latest.stage] ?? latest.stage}
+                        </span>
+                      </div>
                     )}
-                    {latest &&
-                      (latest.status === 'queued' ||
-                        latest.status === 'running') && (
-                        <div
-                          className="generation-progress"
-                          role="progressbar"
-                          aria-label={`${label(role)}生成进度`}
-                          aria-valuemin={0}
-                          aria-valuemax={100}
-                          aria-valuenow={latest.progress}
-                        >
-                          <strong>{latest.progress}%</strong>
-                          <span>
-                            {STAGE_LABELS[latest.stage] ?? latest.stage}
-                          </span>
-                        </div>
-                      )}
                   </div>
                   <div className="generation-card-body">
                     <div className="generation-title">
@@ -386,82 +380,56 @@ export function GenerationPanel({
                               : '未生成'}
                       </span>
                     </div>
-                    {result?.qaResult && (
-                      <div
-                        className={`qa-result ${result.qaResult.status === 'passed' ? 'passed' : 'review'}`}
-                      >
-                        <strong>
-                          {result.qaResult.status === 'passed'
-                            ? '一致性检查通过'
-                            : '需要人工复核'}
-                        </strong>
-                        <p>{result.qaResult.summary}</p>
-                        {result.qaResult.differences
-                          .slice(0, 2)
-                          .map((difference) => (
-                            <small
-                              key={`${difference.aspect}-${difference.description}`}
-                            >
-                              {difference.description}
-                            </small>
-                          ))}
-                      </div>
-                    )}
                     {latest?.status === 'failed' && (
                       <p className="job-error">
                         {latest.errorMessageSafe ?? '任务失败，额度已退回。'}
                       </p>
                     )}
-                    {result && role !== 'main' && (
-                      <p className="export-copy">
-                        <strong>图片文案</strong>
-                        {copy || '无额外营销文案。'}
-                      </p>
-                    )}
-                    <div className="generation-card-actions">
-                      {latest?.status === 'failed' ? (
-                        <button
-                          type="button"
-                          className="ghost"
-                          disabled={
-                            pending || active || !ready || creditBalance < 3
-                          }
-                          onClick={() => retry(latest.id)}
-                        >
-                          重试 · 3 额度
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          className="ghost"
-                          disabled={
-                            pending || active || !ready || creditBalance < 3
-                          }
-                          onClick={() => create(role)}
-                        >
-                          {result ? '重新生成 · 3 额度' : '单张生成 · 3 额度'}
-                        </button>
-                      )}
-                    </div>
-                    {result && (
-                      <div className="download-actions">
-                        <button
-                          type="button"
-                          className="ghost"
-                          disabled={Boolean(exporting)}
-                          onClick={() => exportImages('png', role)}
-                        >
-                          {exporting === `${role}-png` ? '导出中…' : '下载 PNG'}
-                        </button>
-                        <button
-                          type="button"
-                          className="ghost"
-                          disabled={Boolean(exporting)}
-                          onClick={() => exportImages('jpg', role)}
-                        >
-                          {exporting === `${role}-jpg` ? '导出中…' : '下载 JPG'}
-                        </button>
+                    {result ? (
+                      <div className="image-card-footer">
+                        {indicators(
+                          result,
+                          role !== 'main' && role !== 'gallery_1',
+                        )}
+                        <DownloadDialog
+                          projectId={projectId}
+                          asset={result}
+                          label="下载"
+                          variant="ghost"
+                        />
                       </div>
+                    ) : (
+                      <div className="generation-card-actions">
+                        <Button
+                          variant="outline"
+                          disabled={
+                            pending || active || !ready || creditBalance < 3
+                          }
+                          onClick={() =>
+                            create(
+                              role,
+                              latest?.status === 'failed'
+                                ? latest.id
+                                : undefined,
+                            )
+                          }
+                        >
+                          {latest?.status === 'failed'
+                            ? '重试 · 3 额度'
+                            : '单张生成 · 3 额度'}
+                        </Button>
+                      </div>
+                    )}
+                    {result && latest?.status === 'failed' && (
+                      <Button
+                        variant="outline"
+                        disabled={
+                          pending || active || !ready || creditBalance < 3
+                        }
+                        onClick={() => create(role, latest.id)}
+                      >
+                        重试失败任务 · 3 额度
+                      </Button>
                     )}
                   </div>
                 </article>
@@ -469,96 +437,18 @@ export function GenerationPanel({
             })}
         </div>
       )}
-      <Dialog
-        open={Boolean(preview)}
-        onOpenChange={(open) => {
-          if (!open) setPreview(null);
-        }}
-      >
-        <DialogContent>
-          <DialogTitle className="preview-dialog-title">
-            {preview?.imageRole ? label(preview.imageRole) : '图片预览'}
-          </DialogTitle>
-          <DialogDescription className="preview-dialog-description">
-            {preview?.width} × {preview?.height} · 检查成品细节后下载
-          </DialogDescription>
-          {preview && (
-            <>
-              <img
-                className="lightbox-image"
-                src={'/api/assets/' + preview.id + '/content'}
-                alt={preview.originalName}
-              />
-              {preview.qaResult && (
-                <div
-                  className={
-                    preview.qaResult.status === 'passed'
-                      ? 'success'
-                      : 'qa-result review'
-                  }
-                >
-                  <strong>
-                    {preview.qaResult.status === 'passed'
-                      ? '一致性检查通过'
-                      : '需要人工复核'}
-                  </strong>
-                  <p>{preview.qaResult.summary}</p>
-                  {preview.qaResult.differences.map((difference, i) => (
-                    <p key={i}>{difference.description}</p>
-                  ))}
-                </div>
-              )}
-              <div className="lightbox-actions">
-                <Button
-                  variant="outline"
-                  disabled={
-                    visibleAssets.length < 2 ||
-                    !visibleAssets.some((a) => a.id === preview.id)
-                  }
-                  onClick={() => {
-                    const index = visibleAssets.findIndex(
-                      (a) => a.id === preview.id,
-                    );
-                    setPreview(
-                      visibleAssets[
-                        (index - 1 + visibleAssets.length) %
-                          visibleAssets.length
-                      ] ?? preview,
-                    );
-                  }}
-                >
-                  <ArrowLeft />
-                  上一张
-                </Button>
-                <Button
-                  variant="outline"
-                  disabled={
-                    visibleAssets.length < 2 ||
-                    !visibleAssets.some((a) => a.id === preview.id)
-                  }
-                  onClick={() => {
-                    const index = visibleAssets.findIndex(
-                      (a) => a.id === preview.id,
-                    );
-                    setPreview(
-                      visibleAssets[(index + 1) % visibleAssets.length] ??
-                        preview,
-                    );
-                  }}
-                >
-                  下一张
-                  <ArrowRight />
-                </Button>
-                <Button asChild>
-                  <a href={'/api/assets/' + preview.id + '/download'}>
-                    下载原图
-                  </a>
-                </Button>
-              </div>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
+      <ImageDetailsDialog
+        tab={detailTab}
+        onTabChange={setDetailTab}
+        asset={preview}
+        images={filter === 'history' ? history : visibleAssets}
+        projectId={projectId}
+        active={active}
+        creditBalance={creditBalance}
+        onSelect={setPreview}
+        onClose={() => setPreview(null)}
+        onRefresh={onRefresh}
+      />
     </section>
   );
 }

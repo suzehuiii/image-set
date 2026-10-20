@@ -1,4 +1,6 @@
 'use client';
+import { Textarea } from '@/components/ui/textarea';
+import { Button } from '@/components/ui/button';
 
 import type { ProductAnalysisResult } from '../../lib/api';
 import type { ImageRole } from '@image-set/shared';
@@ -50,22 +52,23 @@ export function AnalysisEditor({
           <p>所有内容都可编辑；保存文字不会扣费。</p>
         </div>
         <div className="action-row">
-          <button
+          <Button
+            variant="outline"
             type="button"
             className="ghost"
             disabled={disabled}
             onClick={onReanalyze}
           >
             重新分析 · 1 额度
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             className="primary"
             disabled={disabled}
             onClick={onSave}
           >
             {disabled ? '处理中…' : '保存修改'}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -89,7 +92,7 @@ export function AnalysisEditor({
         <div className="field-grid">
           <label>
             English（每行一个）
-            <textarea
+            <Textarea
               rows={5}
               value={value.keywords.map((item) => item.en).join('\n')}
               onChange={(event) => {
@@ -105,7 +108,7 @@ export function AnalysisEditor({
           </label>
           <label>
             中文（与英文逐行对应）
-            <textarea
+            <Textarea
               rows={5}
               value={value.keywords.map((item) => item.zh).join('\n')}
               onChange={(event) => {
@@ -138,7 +141,7 @@ export function AnalysisEditor({
               />
               <label>
                 事实依据
-                <textarea
+                <Textarea
                   rows={2}
                   value={point.evidence}
                   onChange={(event) =>
@@ -164,7 +167,7 @@ export function AnalysisEditor({
       <div className="analysis-section field-grid">
         <label>
           信息缺口（每行一个）
-          <textarea
+          <Textarea
             rows={4}
             value={value.missingInformation.join('\n')}
             onChange={(event) =>
@@ -177,7 +180,7 @@ export function AnalysisEditor({
         </label>
         <label>
           合规风险（每行一个）
-          <textarea
+          <Textarea
             rows={4}
             value={value.complianceFlags.join('\n')}
             onChange={(event) =>
@@ -196,7 +199,7 @@ export function AnalysisEditor({
               <strong>{ROLE_LABELS[plan.role]}</strong>
               <label>
                 目标
-                <textarea
+                <Textarea
                   rows={2}
                   value={plan.objective}
                   onChange={(event) =>
@@ -209,7 +212,7 @@ export function AnalysisEditor({
               </label>
               <label>
                 视觉方向
-                <textarea
+                <Textarea
                   rows={3}
                   value={plan.visualDirection}
                   onChange={(event) =>

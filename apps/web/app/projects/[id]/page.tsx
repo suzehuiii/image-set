@@ -1,4 +1,5 @@
 'use client';
+import { Input } from '@/components/ui/input';
 import { isBrief, type ProjectAnalysis } from '@image-set/shared';
 
 import Link from 'next/link';
@@ -480,7 +481,7 @@ export default function ProjectPage() {
                     </div>
                     <div className="source-filmstrip">
                       {sources.map((asset) => (
-                        <button
+                        <Button
                           key={asset.id}
                           className={preview.id === asset.id ? 'selected' : ''}
                           onClick={() => setSelectedAsset(asset.id)}
@@ -491,7 +492,7 @@ export default function ProjectPage() {
                             src={'/api/assets/' + asset.id + '/content'}
                             alt={asset.originalName}
                           />
-                        </button>
+                        </Button>
                       ))}
                     </div>
                     <p className="preview-caption">
@@ -663,7 +664,7 @@ function UploadGroup({
             ? `如需更换，请先删除已有${isManual ? '文件' : '图片'}`
             : `或点击选择${isManual ? '文件' : '图片'}`}
         </small>
-        <input
+        <Input
           className="visually-hidden"
           type="file"
           accept={accept}
@@ -703,14 +704,14 @@ function UploadGroup({
                     查看
                   </a>
                 )}
-                <button
+                <Button
                   type="button"
                   className="text-danger"
                   aria-label={`删除 ${asset.originalName}`}
                   onClick={() => onRemove(asset.id)}
                 >
                   删除
-                </button>
+                </Button>
               </div>
             </div>
           </article>

@@ -9,7 +9,15 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
-import { IsIn, IsOptional } from 'class-validator';
+import {
+  IsIn,
+  IsOptional,
+  IsUUID,
+  IsArray,
+  ArrayNotEmpty,
+  ArrayMaxSize,
+  ArrayUnique,
+} from 'class-validator';
 import { zipSync } from 'fflate';
 import { Client as MinioClient } from 'minio';
 import { createHash, randomUUID } from 'node:crypto';
@@ -22,6 +30,7 @@ import {
   IMAGE_ROLES,
   ALL_IMAGE_ROLES,
   projectAnalysisSchema,
+  generationSnapshotSchema,
   isBrief,
   type ImageRole,
 } from '@image-set/shared';
@@ -73,8 +82,21 @@ export type ExportAsset = {
 };
 
 export class CreateExportDto {
+  @IsOptional()
   @IsIn(['png', 'jpg'])
-  format!: ExportImageFormat;
+  format?: ExportImageFormat;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayNotEmpty()
+  @ArrayMaxSize(2)
+  @ArrayUnique()
+  @IsIn(['png', 'jpg'], { each: true })
+  formats?: ExportImageFormat[];
+
+  @IsOptional()
+  @IsUUID()
+  assetId?: string;
 
   @IsOptional()
   @IsIn(ALL_IMAGE_ROLES)
@@ -93,6 +115,8 @@ export class ExportsService {
     projectId: string,
     format: ExportImageFormat,
     requestedRole?: ImageRole,
+    formats: ExportImageFormat[] = [format],
+    assetId?: string,
   ): Promise<{ asset: ExportAsset; bundle: boolean }> {
     const projectResult = await this.database.client.pool.query<ExportProject>(
       `select name, analysis_result as "analysisResult"
@@ -104,21 +128,48 @@ export class ExportsService {
     const parsedAnalysis = projectAnalysisSchema.safeParse(
       project.analysisResult,
     );
-    if (!parsedAnalysis.success) {
+    if (!parsedAnalysis.success && !assetId) {
       throw new BadRequestException('请先完成并保存商品分析');
     }
-    const analysis = parsedAnalysis.data;
-    const campaign = isBrief(analysis) ? analysis.campaign : null;
-    const allRoles = campaign
-      ? campaign.images.map((x) => x.role)
-      : [...IMAGE_ROLES];
-    if (isBrief(analysis) && !campaign)
+    let analysis = parsedAnalysis.success ? parsedAnalysis.data : undefined;
+    let rawHistorical = false;
+    let exactSource: SourceAsset | undefined;
+    if (assetId) {
+      const result = await this.database.client.pool.query<
+        SourceAsset & { snapshot: unknown }
+      >(
+        `select a.image_role as "imageRole", a.object_key as "objectKey", a.width, a.height, j.input_snapshot as snapshot
+         from assets a join generation_jobs j on j.result_asset_id=a.id
+         where a.id=$1 and a.project_id=$2 and a.owner_user_id=$3 and j.user_id=$3
+           and a.asset_type='generated' and a.status='ready' and a.deleted_at is null limit 1`,
+        [assetId, projectId, userId],
+      );
+      exactSource = result.rows[0];
+      if (!exactSource) throw new NotFoundException('图片不存在');
+      const savedSnapshot = generationSnapshotSchema.safeParse(
+        result.rows[0]!.snapshot,
+      );
+      analysis = savedSnapshot.success
+        ? savedSnapshot.data.analysis
+        : undefined;
+      rawHistorical = !savedSnapshot.success;
+      requestedRole = exactSource.imageRole;
+    }
+    const campaign = analysis && isBrief(analysis) ? analysis.campaign : null;
+    const allRoles = exactSource
+      ? [exactSource.imageRole]
+      : campaign
+        ? campaign.images.map((x) => x.role)
+        : [...IMAGE_ROLES];
+    if (analysis && isBrief(analysis) && !campaign && !exactSource)
       throw new BadRequestException(
         '请先完成图片策划；历史成品可从原图链接下载',
       );
     if (requestedRole && !allRoles.some((role) => role === requestedRole))
       throw new BadRequestException('图片不属于当前方案');
-    const sources = await this.latestSources(userId, projectId, campaign?.id);
+    const sources = exactSource
+      ? new Map([[exactSource.imageRole, exactSource]])
+      : await this.latestSources(userId, projectId, campaign?.id);
     const roles = requestedRole ? [requestedRole] : allRoles;
     const selected = roles.map((role) => {
       const source = sources.get(role);
@@ -131,40 +182,51 @@ export class ExportsService {
       }
       return source;
     });
-    const rendered = await Promise.all(
-      selected.map(async (source) => ({
-        role: source.imageRole,
-        buffer: await renderExportImage({
-          source: await this.readObject(source.objectKey),
+    const rendered: Array<{
+      role: ImageRole;
+      format: ExportImageFormat;
+      buffer: Buffer;
+    }> = [];
+    // Keep two-format exports from doubling the number of concurrent Sharp decoders.
+    for (const source of selected) {
+      const sourceBuffer = await this.readObject(source.objectKey);
+      for (const outputFormat of formats) {
+        rendered.push({
           role: source.imageRole,
-          copy: isBrief(analysis)
-            ? ''
-            : marketingCopyForRole(analysis, source.imageRole),
-          direct: Boolean(campaign),
-          width: source.width,
-          height: source.height,
-          format,
-        }),
-      })),
-    );
+          format: outputFormat,
+          buffer: await renderExportImage({
+            source: sourceBuffer,
+            role: source.imageRole,
+            copy:
+              !analysis || isBrief(analysis)
+                ? ''
+                : marketingCopyForRole(analysis, source.imageRole),
+            direct: rawHistorical || Boolean(campaign),
+            width: source.width,
+            height: source.height,
+            format: outputFormat,
+          }),
+        });
+      }
+    }
     const projectSlug = slugify(project.name);
-    if (requestedRole) {
+    if (requestedRole && formats.length === 1) {
       const item = rendered[0] as { role: ImageRole; buffer: Buffer };
-      const originalName = `${projectSlug}-${item.role}.${format}`;
+      const originalName = `${projectSlug}-${item.role}.${formats[0]}`;
       const asset = await this.saveOrReuse({
         userId,
         projectId,
         imageRole: item.role,
         originalName,
-        mimeType: format === 'png' ? 'image/png' : 'image/jpeg',
-        extension: format,
+        mimeType: formats[0] === 'png' ? 'image/png' : 'image/jpeg',
+        extension: formats[0]!,
         buffer: item.buffer,
       });
       return { asset, bundle: false };
     }
     const zipFiles = Object.fromEntries(
       rendered.map((item, index) => [
-        `${String(index + 1).padStart(2, '0')}-${item.role}.${format}`,
+        `${String(index + 1).padStart(2, '0')}-${item.role}.${item.format}`,
         new Uint8Array(item.buffer),
       ]),
     );
@@ -173,7 +235,7 @@ export class ExportsService {
       userId,
       projectId,
       imageRole: null,
-      originalName: `${projectSlug}-image-set-${format}.zip`,
+      originalName: `${projectSlug}-${requestedRole ?? 'image-set'}-${formats.join('-')}.zip`,
       mimeType: 'application/zip',
       extension: 'zip',
       buffer: bundle,
@@ -299,8 +361,10 @@ export class ExportsController {
     return this.exportsService.create(
       user.id,
       projectId,
-      input.format,
+      input.format ?? 'png',
       input.role,
+      input.formats ?? [input.format ?? 'png'],
+      input.assetId,
     );
   }
 }

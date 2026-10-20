@@ -4,6 +4,7 @@ import {
   ConflictException,
   Controller,
   Headers,
+  Get,
   Injectable,
   NotFoundException,
   OnModuleDestroy,
@@ -13,7 +14,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Queue } from 'bullmq';
-import { IsIn, IsOptional } from 'class-validator';
+import { IsIn, IsOptional, IsString, Length } from 'class-validator';
+import { resolveGenerationPrompt } from './generation-prompts.js';
 import { randomUUID } from 'node:crypto';
 import {
   generationSnapshotSchema,
@@ -69,6 +71,12 @@ export class CreateGenerationDto {
   @IsOptional()
   @IsIn(ALL_IMAGE_ROLES)
   role?: ImageRole;
+}
+
+export class RegenerateImageDto {
+  @IsString()
+  @Length(1, 30000)
+  prompt!: string;
 }
 
 @Injectable()
@@ -153,10 +161,64 @@ export class GenerationsService {
     };
   }
 
+  async imageDetails(userId: string, assetId: string) {
+    const result = await this.database.client.pool.query<GenerationJobRow>(
+      this.jobSelect() +
+        ` join assets a on a.id = j.result_asset_id
+      join projects p on p.id = j.project_id
+      where a.id=$1 and a.owner_user_id=$2 and j.user_id=$2 and p.user_id=$2
+        and a.deleted_at is null and p.deleted_at is null and a.asset_type='generated'
+      order by j.created_at desc limit 1`,
+      [assetId, userId],
+    );
+    const job = result.rows[0];
+    if (!job) throw new NotFoundException('图片生成记录不存在');
+    const parsedSnapshot = generationSnapshotSchema.safeParse(
+      job.inputSnapshot,
+    );
+    if (!parsedSnapshot.success)
+      throw new BadRequestException(
+        '此旧版记录无法恢复完整 Prompt，仍可下载原图。',
+      );
+    const snapshot = parsedSnapshot.data;
+    const effectivePrompt = resolveGenerationPrompt(snapshot);
+    const image = isBrief(snapshot.analysis)
+      ? snapshot.analysis.campaign?.images.find((x) => x.role === snapshot.role)
+      : undefined;
+    return {
+      jobId: job.id,
+      role: snapshot.role,
+      prompt: snapshot.promptOverride ?? effectivePrompt,
+      effectivePrompt,
+      reconstructed: !snapshot.resolvedPrompt,
+      copy:
+        image?.copy ??
+        (!isBrief(snapshot.analysis)
+          ? (snapshot.analysis.imagePlan.find((x) => x.role === snapshot.role)
+              ?.copyEn ?? '')
+          : ''),
+      title: image?.title ?? snapshot.role,
+    };
+  }
+
+  async regenerate(
+    userId: string,
+    assetId: string,
+    key: string | undefined,
+    prompt: string,
+  ) {
+    const normalized = prompt.trim();
+    if (!normalized || normalized.length > 30000)
+      throw new BadRequestException('Prompt 长度须为 1–30000 字符');
+    const details = await this.imageDetails(userId, assetId);
+    return this.retry(userId, details.jobId, key, normalized);
+  }
+
   async retry(
     userId: string,
     sourceJobId: string,
     idempotencyKey: string | undefined,
+    prompt?: string,
   ) {
     const key = this.validateKey(idempotencyKey, 120);
     const client = await this.database.client.pool.connect();
@@ -184,8 +246,10 @@ export class GenerationsService {
         if (
           job.jobType !== 'image' ||
           !duplicateSnapshot.success ||
-          duplicateSnapshot.data.requestType !== 'retry' ||
-          duplicateSnapshot.data.sourceJobId !== sourceJobId
+          duplicateSnapshot.data.requestType !==
+            (prompt ? 'regenerate' : 'retry') ||
+          duplicateSnapshot.data.sourceJobId !== sourceJobId ||
+          (Boolean(prompt) && duplicateSnapshot.data.promptOverride !== prompt)
         ) {
           throw new ConflictException('Idempotency-Key 已用于其他请求');
         }
@@ -200,15 +264,35 @@ export class GenerationsService {
         );
         const previous = source.rows[0];
         if (!previous) throw new NotFoundException('任务不存在');
-        if (previous.jobType !== 'image' || previous.status !== 'failed') {
-          throw new ConflictException('只有失败的图片任务可以重试');
+        if (
+          previous.jobType !== 'image' ||
+          previous.status !== (prompt ? 'succeeded' : 'failed')
+        ) {
+          throw new ConflictException(
+            prompt
+              ? '只能从成功图片创建重生成任务'
+              : '只有失败的图片任务可以重试',
+          );
         }
+        await client.query(
+          'select id from projects where id=$1 and user_id=$2 and deleted_at is null for update',
+          [previous.projectId, userId],
+        );
+        const active = await client.query(
+          "select id from generation_jobs where project_id=$1 and user_id=$2 and status in ('queued','running') limit 1",
+          [previous.projectId, userId],
+        );
+        if (active.rowCount)
+          throw new ConflictException('该项目已有任务执行中');
         if (balance < IMAGE_CREDITS) throw new ConflictException('额度不足');
         const parsed = generationSnapshotSchema.parse(previous.inputSnapshot);
         const snapshot: GenerationSnapshot = {
           ...parsed,
-          requestType: 'retry',
+          requestType: prompt ? 'regenerate' : 'retry',
           sourceJobId: previous.id,
+          ...(prompt
+            ? { promptOverride: prompt, resolvedPrompt: undefined }
+            : {}),
         };
         job = await this.insertJob(
           client,
@@ -229,7 +313,7 @@ export class GenerationsService {
           job.id,
           key,
           creditBalance,
-          `单图重试额度预留（${previous.imageRole}）`,
+          `${prompt ? 'Prompt 重生成' : '单图重试'}额度预留（${previous.imageRole}）`,
         );
         await client.query(
           `update projects set status = 'generating', updated_at = now()
@@ -417,11 +501,16 @@ export class GenerationsService {
         userId,
         role,
         process.env.OPENAI_IMAGE_MODEL ?? 'gpt-image-2.5-sunburst',
-        isBrief(snapshot.analysis)
-          ? PROMPT_VERSION
-          : 'ecommerce-nine-image-zh-v3',
+        snapshot.promptOverride
+          ? 'manual-image-prompt-zh-v1'
+          : isBrief(snapshot.analysis)
+            ? PROMPT_VERSION
+            : 'ecommerce-nine-image-zh-v3',
         key,
-        snapshot,
+        generationSnapshotSchema.parse({
+          ...snapshot,
+          resolvedPrompt: resolveGenerationPrompt(snapshot),
+        }),
         IMAGE_CREDITS,
       ],
     );
@@ -568,6 +657,21 @@ export class GenerationsController {
     @Body() input: CreateGenerationDto,
   ) {
     return this.generations.create(user.id, id, idempotencyKey, input.role);
+  }
+
+  @Get('assets/:id/generation')
+  details(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.generations.imageDetails(user.id, id);
+  }
+
+  @Post('assets/:id/regenerations')
+  regenerate(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @Headers('idempotency-key') key: string | undefined,
+    @Body() input: RegenerateImageDto,
+  ) {
+    return this.generations.regenerate(user.id, id, key, input.prompt);
   }
 
   @Post('jobs/:id/retry')

@@ -3,6 +3,7 @@ import * as React from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from './button';
 
 export const Dialog = DialogPrimitive.Root;
 export const DialogTrigger = DialogPrimitive.Trigger;
@@ -15,20 +16,21 @@ export function DialogContent({
 }: React.ComponentProps<typeof DialogPrimitive.Content>) {
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" />
+      <DialogPrimitive.Overlay className="dialog-overlay" />
       <DialogPrimitive.Content
-        className={cn(
-          'fixed left-1/2 top-1/2 z-50 max-h-[90dvh] w-[calc(100%_-_2rem)] max-w-5xl -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-2xl border border-border bg-white p-6 shadow-xl',
-          className,
-        )}
+        className={cn('ui-dialog', className)}
         {...props}
       >
         {children}
-        <DialogPrimitive.Close
-          className="absolute right-4 top-4 inline-flex size-9 items-center justify-center rounded-lg bg-muted text-muted-foreground hover:text-foreground"
-          aria-label="关闭预览"
-        >
-          <X size={18} />
+        <DialogPrimitive.Close asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="dialog-close"
+            aria-label="关闭弹窗"
+          >
+            <X size={18} />
+          </Button>
         </DialogPrimitive.Close>
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>

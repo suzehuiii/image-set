@@ -25,6 +25,12 @@ describe('operational safeguards', () => {
       id: 'generation',
     });
     expect(classifyRateLimit('GET', '/api/auth/me')).toBeUndefined();
+    expect(
+      classifyRateLimit('POST', '/api/assets/image-1/regenerations'),
+    ).toMatchObject({ id: 'generation' });
+    expect(
+      classifyRateLimit('GET', '/api/assets/image-1/generation'),
+    ).toBeUndefined();
   });
 
   it('rejects incomplete or insecure production configuration', () => {

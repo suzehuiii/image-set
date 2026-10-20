@@ -1,4 +1,8 @@
 'use client';
+import { Textarea } from '@/components/ui/textarea';
+import { Select } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -207,9 +211,14 @@ export function BriefEditor({
             · {value.analysisLocale}
           </p>
         </div>
-        <button className="ghost" disabled={blocked} onClick={onReanalyze}>
+        <Button
+          variant="outline"
+          className="ghost"
+          disabled={blocked}
+          onClick={onReanalyze}
+        >
           {zh ? '重新分析 · 1 额度' : 'Analyze again · 1 credit'}
-        </button>
+        </Button>
       </div>
       <fieldset
         hidden={view !== 'brief'}
@@ -218,7 +227,7 @@ export function BriefEditor({
       >
         <label>
           {labels[0]}
-          <textarea
+          <Textarea
             value={value.product.text}
             onChange={(e) =>
               update((next) => {
@@ -237,7 +246,7 @@ export function BriefEditor({
             <h3>{labels[i + 1]}</h3>
             {value[group].map((item, index) => (
               <div className="brief-item" key={index}>
-                <textarea
+                <Textarea
                   aria-label={`${labels[i + 1]} ${index + 1}`}
                   value={item.text}
                   onChange={(e) =>
@@ -257,19 +266,18 @@ export function BriefEditor({
                 </small>
                 <div className="action-row">
                   <label className="inline-check">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={item.confirmed}
-                      onChange={(e) =>
+                      onCheckedChange={(checked) =>
                         update((next) => {
                           const row = next[group][index];
-                          if (row) row.confirmed = e.target.checked;
+                          if (row) row.confirmed = checked === true;
                         })
                       }
                     />
                     {zh ? '采用此项' : 'Include'}
                   </label>
-                  <button
+                  <Button
                     type="button"
                     className="text-danger"
                     onClick={() =>
@@ -279,11 +287,12 @@ export function BriefEditor({
                     }
                   >
                     {zh ? '删除' : 'Remove'}
-                  </button>
+                  </Button>
                 </div>
               </div>
             ))}
-            <button
+            <Button
+              variant="outline"
               className="ghost"
               onClick={() =>
                 update((next) => {
@@ -297,12 +306,12 @@ export function BriefEditor({
               }
             >
               {zh ? '添加' : 'Add'}
-            </button>
+            </Button>
           </section>
         ))}
         <label>
           {zh ? '商品外观与主体身份' : 'Appearance and identity'}
-          <textarea
+          <Textarea
             rows={3}
             value={value.appearance}
             onChange={(e) =>
@@ -324,7 +333,7 @@ export function BriefEditor({
                       'Do not change',
                     ])[i]
               }
-              <textarea
+              <Textarea
                 value={value[key].join('\n')}
                 onChange={(e) =>
                   update((next) => {
@@ -346,7 +355,7 @@ export function BriefEditor({
             {warning}
           </p>
         ))}
-        <button className="primary" onClick={confirmBrief}>
+        <Button className="primary" onClick={confirmBrief}>
           {value.confirmed && !dirty
             ? zh
               ? '简报已确认 · 查看图片方案'
@@ -354,7 +363,7 @@ export function BriefEditor({
             : zh
               ? '确认商品事实与选中建议并保存'
               : 'Confirm facts and selected suggestions'}
-        </button>
+        </Button>
       </fieldset>
       <section
         className="analysis-section planning-settings"
@@ -369,7 +378,7 @@ export function BriefEditor({
         <fieldset className="field-grid" disabled={blocked}>
           <label>
             {zh ? '图片包' : 'Image pack'}
-            <select
+            <Select
               value={config.pack}
               onChange={(e) =>
                 setConfig({
@@ -384,12 +393,12 @@ export function BriefEditor({
               <option value="full">
                 {zh ? '展示图＋详情图' : 'Gallery + PDP'}
               </option>
-            </select>
+            </Select>
           </label>
           {config.pack === 'full' && (
             <label>
               {zh ? '详情数量' : 'PDP count'}
-              <select
+              <Select
                 value={config.detailCount}
                 onChange={(e) =>
                   setConfig({ ...config, detailCount: Number(e.target.value) })
@@ -398,14 +407,14 @@ export function BriefEditor({
                 {[7, 8, 9].map((n) => (
                   <option key={n}>{n}</option>
                 ))}
-              </select>
+              </Select>
             </label>
           )}
           <label>
             {zh
               ? '展示图比例（白底首图固定 1:1）'
               : 'Gallery ratio (hero is 1:1)'}
-            <select
+            <Select
               value={config.galleryRatio}
               onChange={(e) =>
                 setConfig({
@@ -418,12 +427,12 @@ export function BriefEditor({
               {['1:1', '4:5', '3:4'].map((r) => (
                 <option key={r}>{r}</option>
               ))}
-            </select>
+            </Select>
           </label>
           {config.pack === 'full' && (
             <label>
               {zh ? '详情图比例' : 'PDP ratio'}
-              <select
+              <Select
                 value={config.detailRatio}
                 onChange={(e) =>
                   setConfig({
@@ -436,12 +445,12 @@ export function BriefEditor({
                 {['2:3', '3:4', '4:5'].map((r) => (
                   <option key={r}>{r}</option>
                 ))}
-              </select>
+              </Select>
             </label>
           )}
           <label>
             {zh ? '目标市场语言' : 'Target market language'}
-            <select
+            <Select
               value={outputLocale(platform, config.marketLocale)}
               disabled={platform.startsWith('amazon_')}
               onChange={(e) =>
@@ -455,7 +464,7 @@ export function BriefEditor({
               {supportedLocales.map((l) => (
                 <option key={l}>{l}</option>
               ))}
-            </select>
+            </Select>
           </label>
         </fieldset>
         <p>
@@ -466,7 +475,7 @@ export function BriefEditor({
             ? '额度；策划另需 1 额度。直接成图改字需要重新生图，单张 3 额度。'
             : 'credits; planning costs 1 credit. Changing rendered text requires regeneration (3 credits/image).'}
         </p>
-        <button
+        <Button
           className="primary"
           disabled={blocked || dirty || !value.confirmed || balance < 1}
           onClick={plan}
@@ -478,7 +487,7 @@ export function BriefEditor({
             : zh
               ? '生成图片方案 · 1 额度'
               : 'Create image plan · 1 credit'}
-        </button>
+        </Button>
         {error && (
           <p className="error" role="alert">
             {error}
@@ -488,7 +497,7 @@ export function BriefEditor({
           <>
             <label>
               {zh ? '整套风格规范' : 'Campaign Style Lock'}
-              <textarea
+              <Textarea
                 rows={4}
                 disabled={blocked}
                 value={value.campaign.styleLock}
@@ -514,7 +523,7 @@ export function BriefEditor({
                       </small>
                       <label>
                         {zh ? '目标' : 'Objective'}
-                        <textarea
+                        <Textarea
                           value={image.objective}
                           onChange={(e) =>
                             editCampaign(i, 'objective', e.target.value)
@@ -523,7 +532,7 @@ export function BriefEditor({
                       </label>
                       <label>
                         {zh ? '构图' : 'Composition'}
-                        <textarea
+                        <Textarea
                           rows={3}
                           value={image.composition}
                           onChange={(e) =>
@@ -534,7 +543,7 @@ export function BriefEditor({
                       {image.role !== 'gallery_1' && (
                         <label>
                           {zh ? '图片文案' : 'Image copy'}
-                          <textarea
+                          <Textarea
                             value={image.copy}
                             onChange={(e) =>
                               editCampaign(i, 'copy', e.target.value)
@@ -547,7 +556,7 @@ export function BriefEditor({
                 </fieldset>,
                 planContainer,
               )}
-            <button
+            <Button
               className="primary"
               disabled={blocked}
               onClick={() =>
@@ -558,7 +567,7 @@ export function BriefEditor({
               }
             >
               {zh ? '确认并保存图片方案' : 'Confirm and save image plan'}
-            </button>
+            </Button>
           </>
         )}
       </section>

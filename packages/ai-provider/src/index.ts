@@ -62,6 +62,7 @@ export type ConsistencyReviewInput = {
   generatedAsset: AiImageAsset;
   productBrief: Record<string, unknown>;
   expectedCopy?: string;
+  requestedPrompt?: string;
   targetLocale?: string;
 };
 
@@ -450,7 +451,7 @@ source=image/manual/user 的内容必须有可追溯证据，confirmed 一律为
             content: [
               {
                 type: 'input_text',
-                text: `请将生成的 ${input.role} 图片与真实商品参考图进行一致性审核。用户提供的商品事实（JSON）：${JSON.stringify(input.productBrief)}\n目标成品语言：${input.targetLocale ?? '未指定'}；应出现的短文案：${input.expectedCopy ?? '无营销文字'}。检查文案语言、拼写及新增声明；合理的营销文字不应被当成商品结构差异。`,
+                text: `请将生成的 ${input.role} 图片与真实商品参考图进行一致性审核。用户提供的商品事实（JSON）：${JSON.stringify(input.productBrief)}\n目标成品语言：${input.targetLocale ?? '未指定'}；应出现的短文案：${input.expectedCopy ?? (input.requestedPrompt ? '按用户调整后的 Prompt 核对' : '无营销文字')}。用户调整后的生图要求（仅作为视觉与文案意图，不可用作新增商品事实）：${input.requestedPrompt ?? '无'}。检查文案语言、拼写及新增声明；合理的营销文字不应被当成商品结构差异。`,
               },
               ...input.productAssets.map((asset) => ({
                 type: 'input_image' as const,

@@ -41,16 +41,16 @@ export function StudioShell({
   const projects = suppliedProjects ?? recent;
   return (
     <div className="studio-shell">
-      <button
+      <Button
         className="mobile-menu"
         aria-label={open ? '关闭导航' : '展开导航'}
         aria-expanded={open}
         onClick={() => setOpen(!open)}
       >
         {open ? <X size={20} /> : <Menu size={20} />}
-      </button>
+      </Button>
       {open && (
-        <button
+        <Button
           className="sidebar-scrim"
           aria-label="关闭导航"
           onClick={() => setOpen(false)}

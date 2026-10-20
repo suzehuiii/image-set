@@ -1,4 +1,5 @@
 'use client';
+import { Input } from '@/components/ui/input';
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -86,7 +87,7 @@ export default function HomePage() {
           <label className="project-search">
             <Search size={16} />
             <span className="visually-hidden">搜索项目</span>
-            <input
+            <Input
               placeholder="搜索项目名称…"
               value={query}
               onChange={(e) => setQuery(e.target.value)}

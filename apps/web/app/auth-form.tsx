@@ -1,4 +1,6 @@
 'use client';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -47,7 +49,7 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' }) {
         {registering && (
           <label>
             称呼
-            <input
+            <Input
               name="displayName"
               required
               maxLength={80}
@@ -57,11 +59,11 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' }) {
         )}
         <label>
           邮箱
-          <input name="email" required type="email" autoComplete="email" />
+          <Input name="email" required type="email" autoComplete="email" />
         </label>
         <label>
           密码
-          <input
+          <Input
             name="password"
             required
             type="password"
@@ -74,9 +76,9 @@ export function AuthForm({ mode }: { mode: 'login' | 'register' }) {
             {error}
           </p>
         )}
-        <button type="submit" className="primary" disabled={pending}>
+        <Button type="submit" className="primary" disabled={pending}>
           {pending ? '请稍候…' : registering ? '注册并开始' : '登录'}
-        </button>
+        </Button>
         <p className="switch">
           {registering ? '已有账号？' : '还没有账号？'}{' '}
           <Link href={registering ? '/login' : '/register'}>
