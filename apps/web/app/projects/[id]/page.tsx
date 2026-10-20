@@ -8,6 +8,7 @@ import {
   type DragEvent,
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from 'react';
 import {
@@ -17,6 +18,22 @@ import {
   type Project,
   type User,
 } from '../../lib/api';
+import { StudioShell } from '@/components/studio-shell';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import {
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  CheckCircle2,
+  FileText,
+  ImagePlus,
+  Images,
+  LayoutTemplate,
+  Sparkles,
+  Trash2,
+  UploadCloud,
+} from 'lucide-react';
 import { BriefEditor } from './brief-editor';
 import { AnalysisEditor } from './analysis-editor';
 import { GenerationPanel } from './generation-panel';
@@ -35,6 +52,13 @@ export default function ProjectPage() {
   const [uploading, setUploading] = useState(false);
   const [analysisPending, setAnalysisPending] = useState(false);
   const [notice, setNotice] = useState('');
+  const [step, setStep] = useState('materials');
+  const [mobilePanel, setMobilePanel] = useState('config');
+  const [planContainer, setPlanContainer] = useState<HTMLDivElement | null>(
+    null,
+  );
+  const [selectedAsset, setSelectedAsset] = useState<string>();
+  const openedProject = useRef('');
   const load = useCallback(async () => {
     const [details, list, me, jobList] = await Promise.all([
       api<Project>(`/projects/${id}`),
@@ -47,6 +71,28 @@ export default function ProjectPage() {
     setUser(me.user);
     setAnalysis(details.analysisResult ?? undefined);
     setJobs(jobList.items);
+    if (openedProject.current !== id) {
+      openedProject.current = id;
+      const saved = details.analysisResult;
+      const savedCampaign = saved && isBrief(saved) ? saved.campaign : null;
+      const hasImageJobs = jobList.items.some(
+        (job) =>
+          job.jobType === 'image' &&
+          (savedCampaign
+            ? job.campaignId === savedCampaign.id
+            : !job.campaignId),
+      );
+      setStep(
+        hasImageJobs
+          ? 'results'
+          : savedCampaign
+            ? 'plan'
+            : saved
+              ? 'brief'
+              : 'materials',
+      );
+      setMobilePanel(hasImageJobs ? 'preview' : 'config');
+    }
   }, [id]);
   useEffect(() => {
     load().catch((caught: unknown) =>
@@ -75,13 +121,21 @@ export default function ProjectPage() {
   }
   async function remove(assetId: string) {
     if (!confirm('删除这个素材？')) return;
-    await api(`/assets/${assetId}`, { method: 'DELETE' });
-    await load();
+    try {
+      await api(`/assets/${assetId}`, { method: 'DELETE' });
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '删除失败');
+    }
   }
   async function removeProject() {
     if (!confirm('删除项目？此操作会停止后续生成。')) return;
-    await api(`/projects/${id}`, { method: 'DELETE' });
-    router.push('/');
+    try {
+      await api(`/projects/${id}`, { method: 'DELETE' });
+      router.push('/');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '删除失败');
+    }
   }
   async function analyzeProduct() {
     if (!assets.some((asset) => asset.assetType === 'product')) {
@@ -112,6 +166,7 @@ export default function ProjectPage() {
         current ? { ...current, creditBalance: result.creditBalance } : current,
       );
       setNotice('简报已提取，请检查并确认后进行图片策划。');
+      setStep('brief');
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '商品分析失败');
       await load().catch(() => undefined);
@@ -120,7 +175,7 @@ export default function ProjectPage() {
     }
   }
   async function saveAnalysis(next: ProjectAnalysis | undefined = analysis) {
-    if (!next) return;
+    if (!next) return false;
     setAnalysisPending(true);
     setError('');
     setNotice('');
@@ -137,8 +192,10 @@ export default function ProjectPage() {
         current ? { ...current, analysisResult: result.analysis } : current,
       );
       setNotice('修改已保存；本次未扣额度。');
+      return true;
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : '保存失败');
+      return false;
     } finally {
       setAnalysisPending(false);
     }
@@ -149,153 +206,381 @@ export default function ProjectPage() {
         正在载入项目…
       </main>
     );
+  const brief = analysis && isBrief(analysis) ? analysis : undefined;
+  const campaign = brief?.campaign;
+  const dirty =
+    JSON.stringify(analysis) !== JSON.stringify(project?.analysisResult);
+  const busy =
+    analysisPending ||
+    jobs.some((j) => j.status === 'running' || j.status === 'queued');
+  const sources = assets.filter((a) => a.assetType === 'product');
+  const preview = sources.find((a) => a.id === selectedAsset) ?? sources[0];
+  const steps = [
+    {
+      id: 'materials',
+      label: '商品素材',
+      icon: ImagePlus,
+      done: sources.length > 0,
+    },
+    {
+      id: 'brief',
+      label: '商品简报',
+      icon: FileText,
+      done: Boolean(brief?.confirmed) && !dirty,
+    },
+    {
+      id: 'plan',
+      label: '图片方案',
+      icon: LayoutTemplate,
+      done: Boolean(campaign?.confirmed) && !dirty,
+    },
+    { id: 'results', label: '生成结果', icon: Images, done: false },
+  ];
   return (
-    <main className="workspace">
-      <header className="topbar">
-        <div>
-          <Link href="/" className="back">
-            ← 全部项目
-          </Link>
-          <h1>{project?.name ?? '项目'}</h1>
-          <p>
-            {project?.productCategory || '未填写品类'} ·{' '}
-            {project?.targetPlatform.replace('_', ' ')}
-          </p>
-        </div>
-        <button type="button" className="danger" onClick={removeProject}>
-          删除项目
-        </button>
-      </header>
-      {error && (
-        <p className="error banner" role="alert">
-          {error}
-        </p>
-      )}
-      {notice && (
-        <p className="success banner" role="status">
-          {notice}
-        </p>
-      )}
-      <section className="upload-columns">
-        <UploadGroup
-          title="商品实拍图"
-          hint="1–10 张，JPG/PNG/WebP，单张 ≤15MB"
-          type="product"
-          assets={assets}
-          uploading={uploading}
-          onUpload={upload}
-          onRemove={remove}
-        />
-        <UploadGroup
-          title="产品／竞品参考图"
-          hint="可选，最多 4 张，JPG/PNG/WebP/AVIF；仅参考风格与构图"
-          type="reference"
-          assets={assets}
-          uploading={uploading}
-          onUpload={upload}
-          onRemove={remove}
-        />
-        <UploadGroup
-          title="产品说明书"
-          hint="可选，≤15MB；提取 PDF/DOCX 文字，旧 DOC 请转换"
-          type="manual"
-          assets={assets}
-          uploading={uploading}
-          onUpload={upload}
-          onRemove={remove}
-        />
-      </section>
-      {assets.some((a) => a.assetType === 'generated') && (
-        <details className="analysis-card">
-          <summary>已生成图片历史（含旧方案）</summary>
-          <div className="asset-grid">
-            {assets
-              .filter((a) => a.assetType === 'generated')
-              .map((a) => (
-                <a key={a.id} href={`/api/assets/${a.id}/download`}>
-                  <img
-                    style={{
-                      maxWidth: 140,
-                      maxHeight: 140,
-                      objectFit: 'contain',
-                    }}
-                    src={`/api/assets/${a.id}/content`}
-                    alt={a.originalName}
-                  />
-                  <small>
-                    {a.imageRole} · {a.width} × {a.height}
-                  </small>
-                </a>
-              ))}
-          </div>
-        </details>
-      )}
-      {analysis ? (
-        <>
-          {isBrief(analysis) ? (
-            <BriefEditor
-              value={analysis}
-              disabled={
-                analysisPending ||
-                jobs.some(
-                  (j) => j.status === 'running' || j.status === 'queued',
-                )
-              }
-              dirty={
-                JSON.stringify(analysis) !==
-                JSON.stringify(project?.analysisResult)
-              }
-              projectId={id}
-              platform={project?.targetPlatform ?? 'amazon_us'}
-              balance={user?.creditBalance ?? 0}
-              onChange={setAnalysis}
-              onSave={saveAnalysis}
-              onReanalyze={analyzeProduct}
-              onPlanned={load}
-            />
-          ) : (
-            <AnalysisEditor
-              value={analysis}
-              disabled={analysisPending}
-              onChange={setAnalysis}
-              onSave={() => saveAnalysis()}
-              onReanalyze={analyzeProduct}
-            />
-          )}
-          <GenerationPanel
-            projectId={id}
-            creditBalance={user?.creditBalance ?? 0}
-            analysis={analysis}
-            dirty={
-              JSON.stringify(analysis) !==
-              JSON.stringify(project?.analysisResult)
-            }
-            assets={assets}
-            jobs={jobs}
-            onRefresh={load}
-          />
-        </>
-      ) : (
-        <section className="next-step analysis-cta">
+    <StudioShell user={user}>
+      <main className="project-studio">
+        <header className="project-header">
           <div>
-            <p className="eyebrow">AI PRODUCT ANALYSIS</p>
-            <h2>提取商品身份、功能、卖点、人群与场景</h2>
-            <p>基于商品图与已填资料分析；成功消耗 1 额度，失败自动退款。</p>
+            <Link href="/" className="studio-back">
+              <ArrowLeft size={15} /> 全部项目
+            </Link>
+            <div className="project-title-row">
+              <h1>{project?.name ?? '项目'}</h1>
+              <span className="platform-pill">
+                {project?.targetPlatform.replaceAll('_', ' ').toUpperCase()}
+              </span>
+            </div>
           </div>
-          <div className="analysis-cta-actions">
-            <span>当前余额 {user?.creditBalance ?? '—'}</span>
-            <button
-              type="button"
-              className="primary"
-              disabled={analysisPending}
-              onClick={analyzeProduct}
+          <div className="project-header-actions">
+            <span className="save-state">
+              <CheckCircle2 size={14} />
+              {dirty ? '有未保存的修改' : '已与服务器同步'}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="删除项目"
+              onClick={removeProject}
             >
-              {analysisPending ? '正在分析图片…' : '开始分析 · 1 额度'}
-            </button>
+              <Trash2 size={16} />
+            </Button>
           </div>
-        </section>
-      )}
-    </main>
+        </header>
+        <Tabs value={step} onValueChange={setStep} className="project-tabs">
+          <TabsList className="workflow-steps" aria-label="创作步骤">
+            {steps.map((item, index) => (
+              <TabsTrigger
+                key={item.id}
+                value={item.id}
+                disabled={item.id !== 'materials' && !analysis}
+                className="workflow-step"
+              >
+                <span
+                  className={
+                    item.done ? 'step-number completed' : 'step-number'
+                  }
+                >
+                  {item.done ? <Check size={14} /> : index + 1}
+                </span>
+                <span>{item.label}</span>
+                <item.icon size={15} className="step-icon" />
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          {error && (
+            <p className="error studio-banner" role="alert">
+              {error}
+            </p>
+          )}
+          {notice && (
+            <p className="success studio-banner" role="status">
+              {notice}
+            </p>
+          )}
+          <div className="mobile-panel-switch" aria-label="工作区视图">
+            <Button
+              size="sm"
+              variant={mobilePanel === 'config' ? 'default' : 'ghost'}
+              onClick={() => setMobilePanel('config')}
+            >
+              配置与操作
+            </Button>
+            <Button
+              size="sm"
+              variant={mobilePanel === 'preview' ? 'default' : 'ghost'}
+              onClick={() => setMobilePanel('preview')}
+            >
+              图片工作区
+            </Button>
+          </div>
+          <div className={'studio-workbench mobile-' + mobilePanel}>
+            <aside className="configuration-panel" aria-label="商品配置">
+              <TabsContent value="materials">
+                <div className="panel-heading">
+                  <span className="eyebrow">01 / MATERIALS</span>
+                  <h2>从真实商品开始</h2>
+                  <p>清晰的实拍图，让 AI 更懂你的商品。</p>
+                </div>
+                <div className="material-groups">
+                  <UploadGroup
+                    title="商品实拍图"
+                    hint="1–10 张 · JPG / PNG / WebP · 单张 ≤15MB"
+                    type="product"
+                    assets={assets}
+                    uploading={uploading}
+                    onUpload={upload}
+                    onRemove={remove}
+                  />
+                  <UploadGroup
+                    title="风格参考图"
+                    hint="可选，最多 4 张，支持 AVIF；仅参考风格与构图"
+                    type="reference"
+                    assets={assets}
+                    uploading={uploading}
+                    onUpload={upload}
+                    onRemove={remove}
+                  />
+                  <UploadGroup
+                    title="产品说明书"
+                    hint="可选 · PDF / DOCX 文字提取；旧 DOC 请转换"
+                    type="manual"
+                    assets={assets}
+                    uploading={uploading}
+                    onUpload={upload}
+                    onRemove={remove}
+                  />
+                </div>
+                <div className="panel-footer">
+                  <p>分析成功消耗 1 额度，失败自动退款</p>
+                  <Button
+                    disabled={
+                      busy ||
+                      uploading ||
+                      !sources.length ||
+                      (user?.creditBalance ?? 0) < 1
+                    }
+                    onClick={analyzeProduct}
+                  >
+                    <Sparkles />
+                    {analysisPending
+                      ? '正在分析商品…'
+                      : analysis
+                        ? '重新分析商品 · 1 额度'
+                        : '分析商品 · 1 额度'}
+                    <ArrowRight />
+                  </Button>
+                  {analysis && (
+                    <Button variant="ghost" onClick={() => setStep('brief')}>
+                      继续编辑已有简报 <ArrowRight />
+                    </Button>
+                  )}
+                </div>
+              </TabsContent>
+              {analysis && (
+                <div hidden={step !== 'brief' && step !== 'plan'}>
+                  {isBrief(analysis) ? (
+                    <BriefEditor
+                      key={id}
+                      value={analysis}
+                      view={step === 'plan' ? 'plan' : 'brief'}
+                      planContainer={planContainer}
+                      disabled={busy}
+                      dirty={dirty}
+                      projectId={id}
+                      platform={project?.targetPlatform ?? 'amazon_us'}
+                      balance={user?.creditBalance ?? 0}
+                      onChange={setAnalysis}
+                      onSave={saveAnalysis}
+                      onReanalyze={analyzeProduct}
+                      onPlanned={load}
+                      onConfirmed={() => setStep('plan')}
+                    />
+                  ) : (
+                    <AnalysisEditor
+                      value={analysis}
+                      disabled={analysisPending}
+                      onChange={setAnalysis}
+                      onSave={() => void saveAnalysis()}
+                      onReanalyze={analyzeProduct}
+                    />
+                  )}
+                </div>
+              )}
+              <TabsContent value="results">
+                <div className="panel-heading">
+                  <span className="eyebrow">04 / YOUR IMAGE SET</span>
+                  <h2>让方案成为作品</h2>
+                  <p>确认方案后开始生成，每张图片独立执行与结算。</p>
+                </div>
+                <div className="result-summary">
+                  <span>
+                    <Images size={18} />
+                    图片数量
+                    <strong>
+                      {campaign?.images.length ?? (brief ? 0 : 9)} 张
+                    </strong>
+                  </span>
+                  <span>
+                    <Sparkles size={18} />
+                    单图生成<strong>3 额度</strong>
+                  </span>
+                  <span>
+                    <CheckCircle2 size={18} />
+                    方案状态
+                    <strong>
+                      {campaign
+                        ? campaign.confirmed && !dirty
+                          ? '已确认'
+                          : '待确认'
+                        : brief
+                          ? '待策划'
+                          : '历史方案'}
+                    </strong>
+                  </span>
+                </div>
+                <div className="studio-note">
+                  <strong>每一张，都可以再打磨</strong>
+                  <p>
+                    支持单张重新生成。需要复核的图片会保留，并显示具体原因。
+                  </p>
+                  <p>已绘制的文字修改需要重新生图，每张 3 额度。</p>
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={() => setStep(brief ? 'plan' : 'brief')}
+                >
+                  <ArrowLeft />
+                  返回调整方案
+                </Button>
+              </TabsContent>
+            </aside>
+            <section className="visual-workspace" aria-label="图片工作区">
+              <div
+                hidden={step !== 'materials' && step !== 'brief'}
+                className="source-workspace"
+              >
+                <div className="visual-heading">
+                  <div>
+                    <h2>商品原图</h2>
+                    <p>
+                      {step === 'brief'
+                        ? '对照实拍，确认每一个商品事实'
+                        : '好素材，是好作品的第一步'}
+                    </p>
+                  </div>
+                  <span className="subtle-badge">{sources.length} / 10 张</span>
+                </div>
+                {preview ? (
+                  <>
+                    <div className="source-preview">
+                      <img
+                        src={'/api/assets/' + preview.id + '/content'}
+                        alt={preview.originalName}
+                      />
+                    </div>
+                    <div className="source-filmstrip">
+                      {sources.map((asset) => (
+                        <button
+                          key={asset.id}
+                          className={preview.id === asset.id ? 'selected' : ''}
+                          onClick={() => setSelectedAsset(asset.id)}
+                          aria-label={'预览 ' + asset.originalName}
+                          aria-pressed={preview.id === asset.id}
+                        >
+                          <img
+                            src={'/api/assets/' + asset.id + '/content'}
+                            alt={asset.originalName}
+                          />
+                        </button>
+                      ))}
+                    </div>
+                    <p className="preview-caption">
+                      {preview.originalName} · {preview.width} ×{' '}
+                      {preview.height}
+                    </p>
+                  </>
+                ) : (
+                  <div className="studio-empty">
+                    <div className="empty-composition">
+                      <span />
+                      <span />
+                      <span>
+                        <Images size={42} strokeWidth={1} />
+                      </span>
+                    </div>
+                    <span className="eyebrow">
+                      A LITTLE INPUT. A WHOLE NEW LOOK.
+                    </span>
+                    <h2>你的下一套商品视觉，从这里开始</h2>
+                    <p>
+                      在左侧上传真实商品图，AI 将协助你提炼卖点、
+                      <br />
+                      策划视觉，并生成完整的展示图与详情图。
+                    </p>
+                    <div className="empty-flow">
+                      <span>01 上传素材</span>
+                      <ArrowRight size={14} />
+                      <span>02 确认方案</span>
+                      <ArrowRight size={14} />
+                      <span>03 生成套图</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div hidden={step !== 'plan'} className="plan-workspace">
+                <div className="visual-heading">
+                  <div>
+                    <h2>逐图视觉方案</h2>
+                    <p>检查每张图的目标、构图和文案，再确认生成。</p>
+                  </div>
+                  {campaign && (
+                    <span className="subtle-badge">
+                      {campaign.images.length} 张 · {campaign.targetLocale}
+                    </span>
+                  )}
+                </div>
+                {!campaign && (
+                  <div className="studio-empty">
+                    <LayoutTemplate size={48} strokeWidth={1} />
+                    <h2>先定方向，再开始创作</h2>
+                    <p>在左侧选择图片包与比例，生成整套视觉方案。</p>
+                  </div>
+                )}
+                <div ref={setPlanContainer} />
+                {campaign && (
+                  <div className="plan-next">
+                    <span>
+                      {campaign.confirmed && !dirty
+                        ? '方案已确认，可以开始生成'
+                        : '请先在左侧确认并保存图片方案'}
+                    </span>
+                    <Button
+                      disabled={!campaign.confirmed || dirty}
+                      onClick={() => setStep('results')}
+                    >
+                      进入生成 <ArrowRight />
+                    </Button>
+                  </div>
+                )}
+              </div>
+              {analysis && (
+                <div hidden={step !== 'results'}>
+                  <GenerationPanel
+                    projectId={id}
+                    creditBalance={user?.creditBalance ?? 0}
+                    analysis={analysis}
+                    dirty={dirty}
+                    assets={assets}
+                    jobs={jobs}
+                    onRefresh={load}
+                  />
+                </div>
+              )}
+            </section>
+          </div>
+        </Tabs>
+      </main>
+    </StudioShell>
   );
 }
 
@@ -360,7 +645,7 @@ function UploadGroup({
         onDrop={(event) => void dropFiles(event)}
       >
         <span className="upload-icon" aria-hidden="true">
-          {isManual ? 'DOC' : '↑'}
+          {isManual ? <FileText size={20} /> : <UploadCloud size={24} />}
         </span>
         <strong>
           {uploading

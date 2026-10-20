@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   DEFAULT_CAMPAIGN_CONFIG,
   supportedLocales,
@@ -96,6 +97,9 @@ const fieldLabels: Record<string, string[]> = {
 };
 export function BriefEditor({
   value,
+  view = 'brief',
+  planContainer,
+  onConfirmed,
   disabled,
   dirty,
   projectId,
@@ -107,13 +111,16 @@ export function BriefEditor({
   onPlanned,
 }: {
   value: ProductBriefAnalysis;
+  view?: 'brief' | 'plan';
+  planContainer?: HTMLElement | null;
+  onConfirmed?: () => void;
   disabled: boolean;
   dirty: boolean;
   projectId: string;
   platform: string;
   balance: number;
   onChange: (value: ProductBriefAnalysis) => void;
-  onSave: (value: ProductBriefAnalysis) => Promise<void>;
+  onSave: (value: ProductBriefAnalysis) => Promise<boolean>;
   onReanalyze: () => void;
   onPlanned: () => Promise<void>;
 }) {
@@ -135,6 +142,10 @@ export function BriefEditor({
     onChange(next);
   }
   async function confirmBrief() {
+    if (value.confirmed && !dirty) {
+      onConfirmed?.();
+      return;
+    }
     const next = structuredClone(value);
     next.product.confirmed = true;
     for (const group of groups)
@@ -142,7 +153,7 @@ export function BriefEditor({
         if (item.source !== 'suggestion') item.confirmed = true;
     next.confirmed = true;
     next.campaign = null;
-    await onSave(next);
+    if (await onSave(next)) onConfirmed?.();
   }
   async function plan() {
     setPlanning(true);
@@ -186,7 +197,7 @@ export function BriefEditor({
   }
   return (
     <section className="analysis-card" aria-busy={blocked}>
-      <div className="section-head">
+      <div className="section-head" hidden={view !== 'brief'}>
         <div>
           <h2>{zh ? '商品简报' : 'Product brief'}</h2>
           <p>
@@ -200,7 +211,11 @@ export function BriefEditor({
           {zh ? '重新分析 · 1 额度' : 'Analyze again · 1 credit'}
         </button>
       </div>
-      <fieldset disabled={blocked} className="brief-fields">
+      <fieldset
+        hidden={view !== 'brief'}
+        disabled={blocked}
+        className="brief-fields"
+      >
         <label>
           {labels[0]}
           <textarea
@@ -223,6 +238,7 @@ export function BriefEditor({
             {value[group].map((item, index) => (
               <div className="brief-item" key={index}>
                 <textarea
+                  aria-label={`${labels[i + 1]} ${index + 1}`}
                   value={item.text}
                   onChange={(e) =>
                     update((next) => {
@@ -333,14 +349,17 @@ export function BriefEditor({
         <button className="primary" onClick={confirmBrief}>
           {value.confirmed && !dirty
             ? zh
-              ? '简报已确认（点击重新保存）'
-              : 'Brief confirmed'
+              ? '简报已确认 · 查看图片方案'
+              : 'Brief confirmed · View image plan'
             : zh
               ? '确认商品事实与选中建议并保存'
               : 'Confirm facts and selected suggestions'}
         </button>
       </fieldset>
-      <section className="analysis-section">
+      <section
+        className="analysis-section planning-settings"
+        hidden={view !== 'plan'}
+      >
         <h2>{zh ? '图片包与视觉策划' : 'Image pack and visual plan'}</h2>
         <p>
           {zh
@@ -484,46 +503,50 @@ export function BriefEditor({
               {value.campaign.images.length} · {value.campaign.targetLocale} ·{' '}
               {value.campaign.driver}
             </p>
-            <fieldset disabled={blocked} className="plan-grid">
-              {value.campaign.images.map((image, i) => (
-                <article className="plan-card" key={image.role}>
-                  <h3>{image.title}</h3>
-                  <small>
-                    {image.role} · {image.templateId}
-                  </small>
-                  <label>
-                    {zh ? '目标' : 'Objective'}
-                    <textarea
-                      value={image.objective}
-                      onChange={(e) =>
-                        editCampaign(i, 'objective', e.target.value)
-                      }
-                    />
-                  </label>
-                  <label>
-                    {zh ? '构图' : 'Composition'}
-                    <textarea
-                      rows={3}
-                      value={image.composition}
-                      onChange={(e) =>
-                        editCampaign(i, 'composition', e.target.value)
-                      }
-                    />
-                  </label>
-                  {image.role !== 'gallery_1' && (
-                    <label>
-                      {zh ? '图片文案' : 'Image copy'}
-                      <textarea
-                        value={image.copy}
-                        onChange={(e) =>
-                          editCampaign(i, 'copy', e.target.value)
-                        }
-                      />
-                    </label>
-                  )}
-                </article>
-              ))}
-            </fieldset>
+            {planContainer &&
+              createPortal(
+                <fieldset disabled={blocked} className="plan-grid">
+                  {value.campaign.images.map((image, i) => (
+                    <article className="plan-card" key={image.role}>
+                      <h3>{image.title}</h3>
+                      <small>
+                        {image.role} · {image.templateId}
+                      </small>
+                      <label>
+                        {zh ? '目标' : 'Objective'}
+                        <textarea
+                          value={image.objective}
+                          onChange={(e) =>
+                            editCampaign(i, 'objective', e.target.value)
+                          }
+                        />
+                      </label>
+                      <label>
+                        {zh ? '构图' : 'Composition'}
+                        <textarea
+                          rows={3}
+                          value={image.composition}
+                          onChange={(e) =>
+                            editCampaign(i, 'composition', e.target.value)
+                          }
+                        />
+                      </label>
+                      {image.role !== 'gallery_1' && (
+                        <label>
+                          {zh ? '图片文案' : 'Image copy'}
+                          <textarea
+                            value={image.copy}
+                            onChange={(e) =>
+                              editCampaign(i, 'copy', e.target.value)
+                            }
+                          />
+                        </label>
+                      )}
+                    </article>
+                  ))}
+                </fieldset>,
+                planContainer,
+              )}
             <button
               className="primary"
               disabled={blocked}
