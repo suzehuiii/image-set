@@ -188,7 +188,7 @@ export default function ProjectPage() {
         />
         <UploadGroup
           title="产品／竞品参考图"
-          hint="可选，最多 4 张；仅参考风格与构图，不提取竞品事实"
+          hint="可选，最多 4 张，JPG/PNG/WebP/AVIF；仅参考风格与构图"
           type="reference"
           assets={assets}
           uploading={uploading}
@@ -324,7 +324,9 @@ function UploadGroup({
   const disabled = uploading || atLimit;
   const accept = isManual
     ? '.pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-    : 'image/jpeg,image/png,image/webp';
+    : type === 'reference'
+      ? 'image/jpeg,image/png,image/webp,image/avif,.avif'
+      : 'image/jpeg,image/png,image/webp';
 
   async function selectFiles(event: ChangeEvent<HTMLInputElement>) {
     const input = event.currentTarget;

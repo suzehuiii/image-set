@@ -6,7 +6,7 @@
 
 | 项目     | 内容                                                                     |
 | -------- | ------------------------------------------------------------------------ |
-| 当前版本 | 0.14                                                                     |
+| 当前版本 | 0.15                                                                     |
 | 最后更新 | 2026-10-20                                                               |
 | 当前阶段 | M6 商品简报与 Skill 策划生成闭环已实施；类目画像和真实模型质量验收待完成 |
 | 工作名称 | 商品套图 AI                                                              |
@@ -65,7 +65,7 @@
 - 邮箱账号登录与用户数据隔离。
 - 项目创建、项目列表和历史记录。
 - 上传 1–10 张商品图。
-- 可选上传 0–4 张风格参考图。
+- 可选上传 0–4 张产品/竞品参考图，支持 JPG/PNG/WebP/AVIF。
 - 可选上传 0–1 份 PDF、DOC 或 DOCX 产品说明书。
 - 商品图、风格参考图和产品说明书均支持点击选择或拖拽上传。
 - 填写商品名称、品类、规格、材质、目标人群、真实卖点和额外要求。
@@ -174,6 +174,7 @@
 
 ### 3.7 M6 已实现接口、配置与兼容规则
 
+- 当前状态补充（2026-10-20）：reference 产品/竞品参考图支持 AVIF 文件选择与拖拽，验证扩展名、签名、MIME、尺寸及可解码性；原件保存为 image/avif，AI 输入继续转为 JPEG，不改变供应商输入契约或额度。
 - 分析返回 `schemaVersion: 2` 商品简报，含六项信息、商品外观、配件、包装、禁止改动项、缺失信息与提示。列表项保存 `source=image/manual/user/suggestion`、`evidence`、`confirmed`。AI 提取后不自动确认；用户确认商品事实，建议项需勾选后使用。
 - 分析读取 `Accept-Language`，支持 en-US、zh-CN、zh-TW、ja-JP、de-DE、fr-FR、es-ES、it-IT、ko-KR、pt-BR，按语言匹配，不支持则英文回退。Amazon US/JP/DE 的成品语言固定英/日/德；Shopify/TikTok Shop 选择目标市场语言。
 - 新增 `POST /api/projects/:id/plan`，携带 `Idempotency-Key` 和 `{config}`：`pack=gallery|full`，`detailCount=7|8|9`，`galleryRatio=1:1|4:5|3:4`，`detailRatio=2:3|3:4|4:5`，`marketLocale` 为支持语言。默认 full、8、1:1、2:3、en-US，共 13 张。策划消耗 1 额度，失败退款，编辑保存免费。
@@ -291,7 +292,7 @@ M5 初始化新增一条生产安全与可观测性基线：API 为所有响应�
 
 对象存储使用内外双端点：`S3_ENDPOINT` 供 API/Worker 在容器网络内读写，`S3_PUBLIC_ENDPOINT` 只用于生成浏览器可访问的签名读取地址。本地 Compose 默认分别为 `http://minio:9000` 和 `http://localhost:9000`；生产环境的公开端点必须配置为用户可访问且与签名 Host 一致的对象存储或 CDN 域名。
 
-素材上传继续由 API 代理完成。商品图与风格图支持 JPG/PNG/WebP，产品说明书支持 PDF/DOC/DOCX；三类上传都校验客户端 MIME 与二进制签名，说明书还要求扩展名匹配。单文件统一限制 15 MB，说明书每项目最多一份并保存到同一私有对象存储。当前说明书仅作为可查看的项目附件，不进入 OpenAI 输入；未来接入文本抽取前需补齐解析沙箱、提示注入隔离和内容安全策略。
+素材上传继续由 API 代理完成。商品图支持 JPG/PNG/WebP；产品/竞品参考图额外支持 AVIF，产品说明书支持 PDF/DOC/DOCX；三类上传都校验客户端 MIME 与二进制签名，说明书还要求扩展名匹配。单文件统一限制 15 MB，说明书每项目最多一份并保存到同一私有对象存储。当前说明书仅作为可查看的项目附件，不进入 OpenAI 输入；未来接入文本抽取前需补齐解析沙箱、提示注入隔离和内容安全策略。
 
 ### 推荐仓库结构
 
@@ -574,7 +575,7 @@ type ImageCompositionPlan = {
 ### 文件
 
 - `GET /api/projects/:id/assets`：列出当前用户项目的素材。
-- `POST /api/projects/:id/assets?assetType=product|reference|manual`：API 接收单文件 multipart 上传；图片支持 JPG/PNG/WebP，说明书支持 PDF/DOC/DOCX，并完成签名、MIME、扩展名、数量、对象写入和素材记录。
+- `POST /api/projects/:id/assets?assetType=product|reference|manual`：API 接收单文件 multipart 上传；商品图片支持 JPG/PNG/WebP，reference 额外支持 AVIF，说明书支持 PDF/DOC/DOCX，并完成签名、MIME、扩展名、数量、对象写入和素材记录。
 - `GET /api/assets/:id/content`：鉴权下载或返回短期签名 URL。
 - `DELETE /api/assets/:id`
 
@@ -819,6 +820,8 @@ M5 初始化提供独立 `docker-compose.production.yml`、`.env.production.exam
 ---
 
 ## 15. 决策记录
+
+2026-10-20：按用户要求仅扩展产品/竞品参考图（reference）的 AVIF 输入；商品实拍图与说明书格式维持原范围，无需数据库迁移。
 
 2026-10-19 补充：默认采用 Skill 直接生成含文字营销成品的路线，保留确定性合成作为未来备选；商品分析跟随浏览器语言，成品语言由目标平台及站点决定。详见 3.6，覆盖早期冲突决定；功能尚未实施。
 
@@ -1068,6 +1071,13 @@ M5 初始化提供独立 `docker-compose.production.yml`、`.env.production.exam
 - PDF/DOCX 成功、损坏输入和旧 DOC 提示测试通过，总计 38 项测试通过；类型检查、ESLint、格式检查通过。最终镜像在 Linux 容器中验证有效 PDF 提取成功，四项健康检查和 HTTP 冒烟复验通过；再次验证上游 28 个文件哈希均未变化。
 - 未调用真实付费生图服务；受控模型的成功验证不替代真实商品图像质量验收。
 
+### 2026-10-20（参考图 AVIF 支持）
+
+- reference 入口新增 .avif/image/avif；后端校验真实签名、扩展名、声明 MIME（兼容 application/octet-stream）、原有尺寸上限与 Sharp 解码，拒绝损坏或伪装文件。
+- 原 AVIF 私有保存，参考图读取与 AI JPEG 预处理复用现有链路；仅扩展 reference，无数据库迁移与额度变化。
+- 验证：上传校验 7 项测试通过，覆盖真实 AVIF、通用 MIME、大写扩展名、JPEG 转换、伪装/损坏输入及商品图范围；API/Web 类型检查通过。
+- 当前状态：已完成并部署本地 API/Web。Docker 构建、API/Web 类型检查、改动文件 ESLint/格式检查通过；真实 multipart 验证 AVIF 与通用 MIME 上传、Linux 解码、原文件预览、伪装文件拒绝及零额度变化，四项健康检查通过。
+
 ---
 
 ## 17. 未决事项与风险
@@ -1086,6 +1096,7 @@ M5 初始化提供独立 `docker-compose.production.yml`、`.env.production.exam
 
 ### 已知风险
 
+- AVIF 参考图依赖 Sharp/libheif 的 AV1 解码能力；调整运行时镜像或 Sharp 构建时需保留 AVIF 解码验证，AI 端仍只接收转换后的 JPEG。
 - 生成模型无法绝对保证商品一致性，必须保留人工确认步骤。
 - 平台图片规则会变化，需要把规则做成可版本化配置。
 - 生图成本与延迟受模型、尺寸、质量和参考图数量影响，需要记录真实用量后调整额度。

@@ -103,7 +103,71 @@ describe('upload validation', () => {
 
     await expect(
       inspectUpload('reference', uploadFile(buffer, 'image.jpg', 'image/png')),
+    ).rejects.toThrow('参考图仅支持真实的 JPG、PNG、WebP 或 AVIF 图片');
+  });
+
+  it('accepts real AVIF references including generic MIME and converts them for AI input', async () => {
+    const buffer = await sharp({
+      create: { width: 256, height: 300, channels: 3, background: '#1285ab' },
+    })
+      .avif()
+      .toBuffer();
+    for (const mime of ['image/avif', 'application/octet-stream']) {
+      await expect(
+        inspectUpload('reference', uploadFile(buffer, 'reference.AVIF', mime)),
+      ).resolves.toMatchObject({
+        extension: 'avif',
+        mimeType: 'image/avif',
+        width: 256,
+        height: 300,
+      });
+    }
+    const jpeg = await sharp(buffer)
+      .rotate()
+      .flatten({ background: '#ffffff' })
+      .resize({
+        width: 2048,
+        height: 2048,
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
+      .jpeg({ quality: 85 })
+      .toBuffer();
+    expect(await sharp(jpeg).metadata()).toMatchObject({
+      format: 'jpeg',
+      width: 256,
+      height: 300,
+    });
+    await expect(
+      inspectUpload(
+        'product',
+        uploadFile(buffer, 'product.avif', 'image/avif'),
+      ),
     ).rejects.toThrow('仅支持真实的 JPG、PNG 或 WebP 图片');
+  });
+  it('rejects disguised AVIF files and mismatched declared MIME', async () => {
+    const png = await sharp({
+      create: { width: 256, height: 256, channels: 3, background: '#ffffff' },
+    })
+      .png()
+      .toBuffer();
+    const avif = await sharp(png).avif().toBuffer();
+    await expect(
+      inspectUpload('reference', uploadFile(png, 'fake.avif', 'image/avif')),
+    ).rejects.toThrow('参考图仅支持真实的');
+    await expect(
+      inspectUpload('reference', uploadFile(avif, 'real.avif', 'image/png')),
+    ).rejects.toThrow('参考图仅支持真实的');
+    await expect(
+      inspectUpload(
+        'reference',
+        uploadFile(
+          avif.subarray(0, avif.length - 30),
+          'broken.avif',
+          'image/avif',
+        ),
+      ),
+    ).rejects.toThrow();
   });
 
   it('recognizes only uploadable source asset types', () => {
