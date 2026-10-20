@@ -21,6 +21,7 @@ import type { Response } from 'express';
 import { createHash, randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import type { ProductAnalysisAsset } from '@image-set/ai-provider';
+import { REFERENCE_ASSET_LIMIT } from '@image-set/shared';
 
 import { AuthGuard, CurrentUser, type AuthUser } from './auth.js';
 import { DatabaseService } from './database.service.js';
@@ -170,7 +171,7 @@ export class AssetsService {
 
   private assetLimit(assetType: UploadAssetType): number {
     if (assetType === 'product') return 10;
-    if (assetType === 'reference') return 4;
+    if (assetType === 'reference') return REFERENCE_ASSET_LIMIT;
     return 1;
   }
 

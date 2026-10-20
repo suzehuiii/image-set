@@ -469,6 +469,12 @@ textarea:focus {
   display: grid;
   gap: 12px;
 }
+.asset-scroll-list {
+  padding-right: 8px;
+}
+.asset-scroll-list.constrained {
+  height: 252px;
+}
 .asset {
   display: grid;
   grid-template-columns: 84px 1fr;

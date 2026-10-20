@@ -6,9 +6,28 @@ import {
   healthResponseSchema,
   IMAGE_ROLES,
   productAnalysisSchema,
+  REFERENCE_ASSET_LIMIT,
 } from './index.js';
 
 describe('shared contracts', () => {
+  it('accepts up to twenty style reference assets', () => {
+    const references = Array.from(
+      { length: REFERENCE_ASSET_LIMIT },
+      (_, index) =>
+        `00000000-0000-4000-8000-${String(index).padStart(12, '0')}`,
+    );
+    expect(
+      generationSnapshotSchema.shape.referenceAssetIds.safeParse(references)
+        .success,
+    ).toBe(true);
+    expect(
+      generationSnapshotSchema.shape.referenceAssetIds.safeParse([
+        ...references,
+        '00000000-0000-4000-8000-000000000020',
+      ]).success,
+    ).toBe(false);
+  });
+
   it('accepts a valid health payload', () => {
     const result = healthResponseSchema.safeParse({
       service: 'api',

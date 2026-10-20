@@ -344,6 +344,8 @@ export function validateCampaign(
   );
 }
 
+export const REFERENCE_ASSET_LIMIT = 20;
+
 export const generationSnapshotSchema = z.object({
   role: z.enum(ALL_IMAGE_ROLES),
   targetPlatform: z.string().trim().min(1).max(30),
@@ -352,7 +354,7 @@ export const generationSnapshotSchema = z.object({
   productBrief: z.record(z.string(), z.unknown()),
   analysis: projectAnalysisSchema,
   productAssetIds: z.array(z.uuid()).min(1).max(10),
-  referenceAssetIds: z.array(z.uuid()).max(4),
+  referenceAssetIds: z.array(z.uuid()).max(REFERENCE_ASSET_LIMIT),
   requestType: z.enum(['full_set', 'regenerate', 'retry']),
   sourceJobId: z.uuid().optional(),
   promptOverride: z.string().trim().min(1).max(30000).optional(),

@@ -433,7 +433,15 @@ export class GenerationsService {
           productBrief: project.productBrief,
           analysis: analysis.data,
           productAssetIds,
-          referenceAssetIds: isBrief(analysis.data) ? [] : referenceAssetIds,
+          // The legacy image-edit path accepts at most 16 total image inputs.
+          // New brief projects use every reference during planning and do not
+          // forward style references into image generation.
+          referenceAssetIds: isBrief(analysis.data)
+            ? []
+            : referenceAssetIds.slice(
+                0,
+                Math.max(0, 16 - productAssetIds.length),
+              ),
           requestType,
         };
         const job = await this.insertJob(

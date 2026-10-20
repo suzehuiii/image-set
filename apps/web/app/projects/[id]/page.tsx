@@ -1,6 +1,10 @@
 'use client';
 import { Input } from '@/components/ui/input';
-import { isBrief, type ProjectAnalysis } from '@image-set/shared';
+import {
+  isBrief,
+  REFERENCE_ASSET_LIMIT,
+  type ProjectAnalysis,
+} from '@image-set/shared';
 
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -21,6 +25,7 @@ import {
 } from '../../lib/api';
 import { StudioShell } from '@/components/studio-shell';
 import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
   ArrowLeft,
@@ -334,7 +339,7 @@ export default function ProjectPage() {
                   />
                   <UploadGroup
                     title="风格参考图"
-                    hint="可选，最多 4 张，支持 AVIF；仅参考风格与构图"
+                    hint={`可选，最多 ${REFERENCE_ASSET_LIMIT} 张，支持 AVIF；仅参考风格与构图`}
                     type="reference"
                     assets={assets}
                     uploading={uploading}
@@ -605,7 +610,8 @@ function UploadGroup({
   const [dragging, setDragging] = useState(false);
   const filtered = assets.filter((asset) => asset.assetType === type);
   const isManual = type === 'manual';
-  const limit = type === 'product' ? 10 : type === 'reference' ? 4 : 1;
+  const limit =
+    type === 'product' ? 10 : type === 'reference' ? REFERENCE_ASSET_LIMIT : 1;
   const atLimit = filtered.length >= limit;
   const disabled = uploading || atLimit;
   const accept = isManual
@@ -673,50 +679,55 @@ function UploadGroup({
           onChange={(event) => void selectFiles(event)}
         />
       </label>
-      <div className="asset-grid">
-        {filtered.map((asset) => (
-          <article className="asset" key={asset.id}>
-            {isManual ? (
-              <span className="document-preview" aria-hidden="true">
-                {asset.originalName.split('.').pop()?.toUpperCase() ?? 'DOC'}
-              </span>
-            ) : (
-              <img
-                src={`/api/assets/${asset.id}/content`}
-                alt={asset.originalName}
-              />
-            )}
-            <div>
-              <strong>{asset.originalName}</strong>
-              <small>
-                {asset.width && asset.height
-                  ? `${asset.width} × ${asset.height} · `
-                  : ''}
-                {(asset.fileSize / 1024 / 1024).toFixed(1)} MB
-              </small>
-              <div className="asset-actions">
-                {isManual && (
-                  <a
-                    href={`/api/assets/${asset.id}/content`}
-                    target="_blank"
-                    rel="noreferrer"
+      <ScrollArea
+        className={`asset-scroll-list${filtered.length > 4 ? ' constrained' : ''}`}
+        aria-label={`${title}列表，共 ${filtered.length} 项`}
+      >
+        <div className="asset-grid">
+          {filtered.map((asset) => (
+            <article className="asset" key={asset.id}>
+              {isManual ? (
+                <span className="document-preview" aria-hidden="true">
+                  {asset.originalName.split('.').pop()?.toUpperCase() ?? 'DOC'}
+                </span>
+              ) : (
+                <img
+                  src={`/api/assets/${asset.id}/content`}
+                  alt={asset.originalName}
+                />
+              )}
+              <div>
+                <strong>{asset.originalName}</strong>
+                <small>
+                  {asset.width && asset.height
+                    ? `${asset.width} × ${asset.height} · `
+                    : ''}
+                  {(asset.fileSize / 1024 / 1024).toFixed(1)} MB
+                </small>
+                <div className="asset-actions">
+                  {isManual && (
+                    <a
+                      href={`/api/assets/${asset.id}/content`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      查看
+                    </a>
+                  )}
+                  <Button
+                    type="button"
+                    className="text-danger"
+                    aria-label={`删除 ${asset.originalName}`}
+                    onClick={() => onRemove(asset.id)}
                   >
-                    查看
-                  </a>
-                )}
-                <Button
-                  type="button"
-                  className="text-danger"
-                  aria-label={`删除 ${asset.originalName}`}
-                  onClick={() => onRemove(asset.id)}
-                >
-                  删除
-                </Button>
+                    删除
+                  </Button>
+                </div>
               </div>
-            </div>
-          </article>
-        ))}
-      </div>
+            </article>
+          ))}
+        </div>
+      </ScrollArea>
     </section>
   );
 }

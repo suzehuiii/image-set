@@ -2,6 +2,7 @@
 import { Input } from '@/components/ui/input';
 
 import Link from 'next/link';
+import { REFERENCE_ASSET_LIMIT } from '@image-set/shared';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { api, type Project, type User } from './lib/api';
@@ -98,7 +99,9 @@ export default function HomePage() {
           <section className="empty">
             <span>✦</span>
             <h2>从第一件商品开始</h2>
-            <p>可上传 1–10 张商品图和最多 4 张风格参考图。</p>
+            <p>
+              可上传 1–10 张商品图和最多 {REFERENCE_ASSET_LIMIT} 张风格参考图。
+            </p>
             <Link className="primary link-button" href="/projects/new">
               新建项目
             </Link>
