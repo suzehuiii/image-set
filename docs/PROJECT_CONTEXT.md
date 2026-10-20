@@ -1169,7 +1169,7 @@ M5 初始化提供独立 `docker-compose.production.yml`、`.env.production.exam
 - 风格参考图旁新增持久化 Checkbox；默认仍只借鉴风格与构图。勾选后，下一次商品简报会把参考图中的展示信息、工作状态、特效及表达方式扩展为待确认建议；图片策划可继续借鉴这些表达，但不允许未确认参数成为 factRefs。
 - 取消生图创建和单图重试的项目级活动任务互斥；前端在已有任务 queued/running 时仍可创建整套、单图、失败重试和 Prompt 重生成。所有任务独立预扣并进入 BullMQ，Worker 实际全局并发维持 2，超出部分排队。
 - 左下角个人账号改为点击菜单，首个入口为额度兑换；新增 `/account/redeem` 与 `POST /api/credits/redeem`。固定测试码 `IMAGESET-TEST-500` 入账 500，每账号只可成功一次，入账与 grant 流水在同一事务中完成。
-- 验证：10 个测试文件共 52 项测试通过，覆盖参考内容显式开关、活动任务存在时继续入队、兑换成功/错误码/重复兑换；全工作区类型检查与 Web/API/Worker 生产构建通过，Next.js 已构建 `/account/redeem` 路由。Lint、格式与差异检查见最终提交验证。未调用付费模型，未使用真实兑换账号。
+- 验证：10 个测试文件共 52 项测试通过，覆盖参考内容显式开关、活动任务存在时继续入队、兑换成功/错误码/重复兑换；全工作区类型检查、Lint、格式、差异检查与 Web/API/Worker 生产构建通过，Next.js 已构建 `/account/redeem` 路由。本地 Docker 已重建并替换 Web/API/Worker，七项服务健康；`http://localhost:8080/` 与 `/account/redeem` 均返回 200，兑换页路由标记已出现，API 对 PostgreSQL、Redis 和对象存储的健康检查均为 `up`。未调用付费模型，未使用真实兑换账号。
 
 ---
 
