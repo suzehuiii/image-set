@@ -1,21 +1,13 @@
 'use client';
-import { Input } from '@/components/ui/input';
-
 import Link from 'next/link';
 import { REFERENCE_ASSET_LIMIT } from '@image-set/shared';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api, type Project, type User } from './lib/api';
 import { StudioShell } from '@/components/studio-shell';
 import { Button } from '@/components/ui/button';
-import {
-  ArrowUpRight,
-  FolderOpen,
-  Images,
-  Plus,
-  Search,
-  Sparkles,
-} from 'lucide-react';
+import { ListToolbar, type TimeSort } from '@/components/list-toolbar';
+import { ArrowUpRight, FolderOpen, Images, Plus, Sparkles } from 'lucide-react';
 
 export default function HomePage() {
   const router = useRouter();
@@ -23,6 +15,7 @@ export default function HomePage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<TimeSort>('updated_desc');
   useEffect(() => {
     Promise.all([
       api<{ user: User }>('/auth/me'),
@@ -35,6 +28,18 @@ export default function HomePage() {
       .catch(() => router.replace('/login'))
       .finally(() => setLoading(false));
   }, [router]);
+  const visibleProjects = useMemo(() => {
+    const key = sort.startsWith('created') ? 'createdAt' : 'updatedAt';
+    const direction = sort.endsWith('desc') ? -1 : 1;
+    return projects
+      .filter((project) =>
+        project.name.toLowerCase().includes(query.trim().toLowerCase()),
+      )
+      .toSorted(
+        (a, b) =>
+          (new Date(a[key]).getTime() - new Date(b[key]).getTime()) * direction,
+      );
+  }, [projects, query, sort]);
   if (loading)
     return (
       <main className="centered" aria-live="polite" aria-busy="true">
@@ -85,15 +90,12 @@ export default function HomePage() {
             </h2>
             <p>继续创作，或开启一个新的商品故事。</p>
           </div>
-          <label className="project-search">
-            <Search size={16} />
-            <span className="visually-hidden">搜索项目</span>
-            <Input
-              placeholder="搜索项目名称…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          </label>
+          <ListToolbar
+            query={query}
+            onQueryChange={setQuery}
+            sort={sort}
+            onSortChange={setSort}
+          />
         </section>
         {projects.length === 0 ? (
           <section className="empty">
@@ -108,54 +110,49 @@ export default function HomePage() {
           </section>
         ) : (
           <section className="project-grid">
-            {projects
-              .filter((project) =>
-                project.name.toLowerCase().includes(query.toLowerCase()),
-              )
-              .map((project) => (
-                <Link
-                  key={project.id}
-                  href={`/projects/${project.id}`}
-                  className="project-card"
-                >
-                  <div className="project-thumb">
-                    <span className="project-folder">
-                      <FolderOpen size={40} strokeWidth={1.2} />
-                    </span>
-                    <span className="project-platform">
-                      {project.targetPlatform
-                        .replaceAll('_', ' ')
-                        .toUpperCase()}
-                    </span>
-                    <span className="project-asset-count">
-                      <Images size={14} />
-                      {project.assetCount
-                        ? `${project.assetCount} 份素材`
-                        : '等待上传素材'}
-                    </span>
-                  </div>
-                  <h3>{project.name}</h3>
-                  <p>
-                    {project.productCategory || '未填写品类'} ·{' '}
-                    {project.targetPlatform.replace('_', ' ')}
-                  </p>
-                  <small>
+            {visibleProjects.map((project) => (
+              <Link
+                key={project.id}
+                href={`/projects/${project.id}`}
+                className="project-card"
+              >
+                <div className="project-thumb">
+                  <span className="project-folder">
+                    <FolderOpen size={40} strokeWidth={1.2} />
+                  </span>
+                  <span className="project-platform">
+                    {project.targetPlatform.replaceAll('_', ' ').toUpperCase()}
+                  </span>
+                  <span className="project-asset-count">
+                    <Images size={14} />
+                    {project.assetCount
+                      ? `${project.assetCount} 份素材`
+                      : '等待上传素材'}
+                  </span>
+                </div>
+                <h3>{project.name}</h3>
+                <p>
+                  {project.productCategory || '未填写品类'} ·{' '}
+                  {project.targetPlatform.replace('_', ' ')}
+                </p>
+                <small>
+                  <span>
+                    创建于 {new Date(project.createdAt).toLocaleString('zh-CN')}
+                  </span>
+                  <span>
                     更新于 {new Date(project.updatedAt).toLocaleString('zh-CN')}
-                  </small>
-                </Link>
-              ))}
+                  </span>
+                </small>
+              </Link>
+            ))}
           </section>
         )}
-        {projects.length > 0 &&
-          !projects.some((p) =>
-            p.name.toLowerCase().includes(query.toLowerCase()),
-          ) && (
-            <div className="empty">
-              <Search size={28} />
-              <h2>没有找到相关项目</h2>
-              <p>试试其他关键词。</p>
-            </div>
-          )}
+        {projects.length > 0 && visibleProjects.length === 0 && (
+          <div className="empty">
+            <h2>没有找到相关项目</h2>
+            <p>试试其他关键词。</p>
+          </div>
+        )}
       </main>
     </StudioShell>
   );

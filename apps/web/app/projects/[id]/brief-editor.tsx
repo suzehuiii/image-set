@@ -200,7 +200,10 @@ export function BriefEditor({
     }, false);
   }
   return (
-    <section className="analysis-card" aria-busy={blocked}>
+    <section
+      className={`analysis-card${view === 'brief' ? ' brief-editor-layout' : ''}`}
+      aria-busy={blocked}
+    >
       <div className="section-head" hidden={view !== 'brief'}>
         <div>
           <h2>{zh ? '商品简报' : 'Product brief'}</h2>
@@ -220,142 +223,142 @@ export function BriefEditor({
           {zh ? '重新分析 · 1 额度' : 'Analyze again · 1 credit'}
         </Button>
       </div>
-      <fieldset
-        hidden={view !== 'brief'}
-        disabled={blocked}
-        className="brief-fields"
-      >
-        <label>
-          {labels[0]}
-          <Textarea
-            value={value.product.text}
-            onChange={(e) =>
-              update((next) => {
-                next.product.text = e.target.value;
-                next.product.source = 'user';
-                next.product.confirmed = true;
-              })
-            }
-          />
-          <small>
-            {sourceLabels[value.product.source]} · {value.product.evidence}
-          </small>
-        </label>
-        {groups.map((group, i) => (
-          <section className="analysis-section" key={group}>
-            <h3>{labels[i + 1]}</h3>
-            {value[group].map((item, index) => (
-              <div className="brief-item" key={index}>
+      <div className="brief-scroll-body" hidden={view !== 'brief'}>
+        <fieldset disabled={blocked} className="brief-fields">
+          <label>
+            {labels[0]}
+            <Textarea
+              value={value.product.text}
+              onChange={(e) =>
+                update((next) => {
+                  next.product.text = e.target.value;
+                  next.product.source = 'user';
+                  next.product.confirmed = true;
+                })
+              }
+            />
+            <small>
+              {sourceLabels[value.product.source]} · {value.product.evidence}
+            </small>
+          </label>
+          {groups.map((group, i) => (
+            <section className="analysis-section" key={group}>
+              <h3>{labels[i + 1]}</h3>
+              {value[group].map((item, index) => (
+                <div className="brief-item" key={index}>
+                  <Textarea
+                    aria-label={`${labels[i + 1]} ${index + 1}`}
+                    value={item.text}
+                    onChange={(e) =>
+                      update((next) => {
+                        const row = next[group][index];
+                        if (row) {
+                          row.text = e.target.value;
+                          row.source = 'user';
+                          row.confirmed = true;
+                          row.evidence = zh ? '用户编辑确认' : 'Edited by user';
+                        }
+                      })
+                    }
+                  />
+                  <small>
+                    {sourceLabels[item.source]} · {item.evidence}
+                  </small>
+                  <div className="action-row">
+                    <label className="inline-check">
+                      <Checkbox
+                        checked={item.confirmed}
+                        onCheckedChange={(checked) =>
+                          update((next) => {
+                            const row = next[group][index];
+                            if (row) row.confirmed = checked === true;
+                          })
+                        }
+                      />
+                      {zh ? '采用此项' : 'Include'}
+                    </label>
+                    <Button
+                      type="button"
+                      className="text-danger"
+                      onClick={() =>
+                        update((next) => {
+                          next[group].splice(index, 1);
+                        })
+                      }
+                    >
+                      {zh ? '删除' : 'Remove'}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              <Button
+                variant="outline"
+                className="ghost"
+                onClick={() =>
+                  update((next) => {
+                    next[group].push({
+                      text: zh ? '请填写' : 'Enter information',
+                      source: 'user',
+                      evidence: zh ? '用户补充' : 'User supplied',
+                      confirmed: true,
+                    });
+                  })
+                }
+              >
+                {zh ? '添加' : 'Add'}
+              </Button>
+            </section>
+          ))}
+          <label>
+            {zh ? '商品外观与主体身份' : 'Appearance and identity'}
+            <Textarea
+              rows={3}
+              value={value.appearance}
+              onChange={(e) =>
+                update((next) => {
+                  next.appearance = e.target.value;
+                })
+              }
+            />
+          </label>
+          {(['accessories', 'packaging', 'forbiddenChanges'] as const).map(
+            (key, i) => (
+              <label key={key}>
+                {
+                  (zh
+                    ? ['包含配件', '包装（不作为主商品）', '禁止改动项']
+                    : [
+                        'Included accessories',
+                        'Packaging (not the primary product)',
+                        'Do not change',
+                      ])[i]
+                }
                 <Textarea
-                  aria-label={`${labels[i + 1]} ${index + 1}`}
-                  value={item.text}
+                  value={value[key].join('\n')}
                   onChange={(e) =>
                     update((next) => {
-                      const row = next[group][index];
-                      if (row) {
-                        row.text = e.target.value;
-                        row.source = 'user';
-                        row.confirmed = true;
-                        row.evidence = zh ? '用户编辑确认' : 'Edited by user';
-                      }
+                      next[key] = e.target.value.split('\n').filter(Boolean);
                     })
                   }
                 />
-                <small>
-                  {sourceLabels[item.source]} · {item.evidence}
-                </small>
-                <div className="action-row">
-                  <label className="inline-check">
-                    <Checkbox
-                      checked={item.confirmed}
-                      onCheckedChange={(checked) =>
-                        update((next) => {
-                          const row = next[group][index];
-                          if (row) row.confirmed = checked === true;
-                        })
-                      }
-                    />
-                    {zh ? '采用此项' : 'Include'}
-                  </label>
-                  <Button
-                    type="button"
-                    className="text-danger"
-                    onClick={() =>
-                      update((next) => {
-                        next[group].splice(index, 1);
-                      })
-                    }
-                  >
-                    {zh ? '删除' : 'Remove'}
-                  </Button>
-                </div>
-              </div>
-            ))}
-            <Button
-              variant="outline"
-              className="ghost"
-              onClick={() =>
-                update((next) => {
-                  next[group].push({
-                    text: zh ? '请填写' : 'Enter information',
-                    source: 'user',
-                    evidence: zh ? '用户补充' : 'User supplied',
-                    confirmed: true,
-                  });
-                })
-              }
-            >
-              {zh ? '添加' : 'Add'}
-            </Button>
-          </section>
-        ))}
-        <label>
-          {zh ? '商品外观与主体身份' : 'Appearance and identity'}
-          <Textarea
-            rows={3}
-            value={value.appearance}
-            onChange={(e) =>
-              update((next) => {
-                next.appearance = e.target.value;
-              })
-            }
-          />
-        </label>
-        {(['accessories', 'packaging', 'forbiddenChanges'] as const).map(
-          (key, i) => (
-            <label key={key}>
-              {
-                (zh
-                  ? ['包含配件', '包装（不作为主商品）', '禁止改动项']
-                  : [
-                      'Included accessories',
-                      'Packaging (not the primary product)',
-                      'Do not change',
-                    ])[i]
-              }
-              <Textarea
-                value={value[key].join('\n')}
-                onChange={(e) =>
-                  update((next) => {
-                    next[key] = e.target.value.split('\n').filter(Boolean);
-                  })
-                }
-              />
-            </label>
-          ),
-        )}
-        {value.missingInformation.length > 0 && (
-          <p>
-            {zh ? '待补充：' : 'Missing: '}
-            {value.missingInformation.join(' · ')}
-          </p>
-        )}
-        {value.warnings.map((warning, i) => (
-          <p className="error" key={i}>
-            {warning}
-          </p>
-        ))}
-        <Button className="primary" onClick={confirmBrief}>
+              </label>
+            ),
+          )}
+          {value.missingInformation.length > 0 && (
+            <p>
+              {zh ? '待补充：' : 'Missing: '}
+              {value.missingInformation.join(' · ')}
+            </p>
+          )}
+          {value.warnings.map((warning, i) => (
+            <p className="error" key={i}>
+              {warning}
+            </p>
+          ))}
+        </fieldset>
+      </div>
+      <footer className="brief-confirm-footer" hidden={view !== 'brief'}>
+        <Button className="primary" disabled={blocked} onClick={confirmBrief}>
           {value.confirmed && !dirty
             ? zh
               ? '简报已确认 · 查看图片方案'
@@ -364,7 +367,7 @@ export function BriefEditor({
               ? '确认商品事实与选中建议并保存'
               : 'Confirm facts and selected suggestions'}
         </Button>
-      </fieldset>
+      </footer>
       <section
         className="analysis-section planning-settings"
         hidden={view !== 'plan'}

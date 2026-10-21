@@ -14,6 +14,7 @@ export type Project = {
   analysisResult: ProjectAnalysis | null;
   status: string;
   assetCount: number;
+  createdAt: string;
   updatedAt: string;
 };
 export type { ProductAnalysisResult } from '@image-set/shared';

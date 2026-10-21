@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   Aperture,
   ArrowUpRight,
@@ -11,13 +11,13 @@ import {
   LayoutGrid,
   LogOut,
   Menu,
-  MoreHorizontal,
   Plus,
   Sparkles,
   X,
 } from 'lucide-react';
 import { api, type Project, type User } from '@/app/lib/api';
 import { Button } from './ui/button';
+import { BackToTop } from './back-to-top';
 
 export function StudioShell({
   children,
@@ -34,12 +34,22 @@ export function StudioShell({
   const [open, setOpen] = useState(false);
   const [error, setError] = useState('');
   const [profileOpen, setProfileOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (suppliedProjects) return;
     api<{ items: Project[] }>('/projects')
       .then((result) => setRecent(result.items))
       .catch(() => undefined);
   }, [suppliedProjects]);
+  useEffect(() => {
+    if (!profileOpen) return;
+    const close = (event: PointerEvent) => {
+      if (!profileMenuRef.current?.contains(event.target as Node))
+        setProfileOpen(false);
+    };
+    document.addEventListener('pointerdown', close);
+    return () => document.removeEventListener('pointerdown', close);
+  }, [profileOpen]);
   const projects = suppliedProjects ?? recent;
   return (
     <div className="studio-shell">
@@ -118,7 +128,7 @@ export function StudioShell({
                 <span>可用额度</span>
                 <strong>{user.creditBalance}</strong>
               </div>
-              <div className="profile-menu-wrap">
+              <div className="profile-menu-wrap" ref={profileMenuRef}>
                 {profileOpen && (
                   <div className="profile-menu" role="menu">
                     <Link
@@ -147,7 +157,13 @@ export function StudioShell({
                     </Button>
                   </div>
                 )}
-                <div className="profile-row">
+                <Button
+                  variant="ghost"
+                  className="profile-row"
+                  aria-label="账号菜单"
+                  aria-expanded={profileOpen}
+                  onClick={() => setProfileOpen((value) => !value)}
+                >
                   <span className="avatar">
                     {user.displayName.slice(0, 1).toUpperCase()}
                   </span>
@@ -155,16 +171,7 @@ export function StudioShell({
                     {user.displayName}
                     <small>个人工作空间</small>
                   </span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label="账号菜单"
-                    aria-expanded={profileOpen}
-                    onClick={() => setProfileOpen((value) => !value)}
-                  >
-                    <MoreHorizontal />
-                  </Button>
-                </div>
+                </Button>
               </div>
             </>
           )}
@@ -176,6 +183,7 @@ export function StudioShell({
         </div>
       </aside>
       <div className="studio-main">{children}</div>
+      <BackToTop />
     </div>
   );
 }

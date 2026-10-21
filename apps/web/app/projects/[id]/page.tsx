@@ -345,7 +345,10 @@ export default function ProjectPage() {
             </Button>
           </div>
           <div className={'studio-workbench mobile-' + mobilePanel}>
-            <aside className="configuration-panel" aria-label="商品配置">
+            <aside
+              className={`configuration-panel${step === 'brief' ? ' brief-active' : ''}`}
+              aria-label="商品配置"
+            >
               <TabsContent value="materials">
                 <div className="panel-heading">
                   <span className="eyebrow">01 / MATERIALS</span>

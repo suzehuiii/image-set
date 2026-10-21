@@ -1133,9 +1133,18 @@ label small,
 }
 .profile-row {
   display: flex;
+  width: 100%;
   align-items: center;
+  justify-content: flex-start;
   gap: 9px;
   padding: 12px 0 18px;
+  height: auto;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+}
+.profile-row:hover {
+  background: #f7f4f1;
 }
 .profile-menu-wrap {
   position: relative;
@@ -1239,6 +1248,16 @@ label small,
   min-width: 0;
   font-size: 0.875rem;
   overflow-wrap: anywhere;
+}
+.back-to-top {
+  position: fixed;
+  right: 28px;
+  bottom: 28px;
+  z-index: 45;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  box-shadow: 0 10px 28px rgb(49 40 36 / 18%);
 }
 .profile-name small {
   display: block;
@@ -1380,6 +1399,18 @@ label small,
 .project-search input:focus {
   box-shadow: none;
 }
+.list-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.time-sort {
+  min-width: 142px;
+}
+.time-sort select {
+  min-height: 42px;
+  font-size: 0.875rem;
+}
 .project-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(235px, 1fr));
@@ -1446,6 +1477,8 @@ label small,
   color: var(--muted-foreground);
 }
 .project-card > small {
+  display: grid;
+  gap: 3px;
   margin: 0 5px;
   font-size: 0.8125rem;
   color: var(--muted-foreground);
@@ -1853,6 +1886,29 @@ label small,
   padding: 0;
   border: 0;
   border-radius: 0;
+}
+.configuration-panel.brief-active {
+  overflow: hidden;
+}
+.configuration-panel .brief-editor-layout {
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - 280px);
+  min-height: 530px;
+}
+.brief-scroll-body {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  margin: 14px -10px 0 0;
+  padding-right: 10px;
+}
+.brief-confirm-footer {
+  flex: none;
+  margin: 14px -20px -22px;
+  padding: 14px 20px 20px;
+  border-top: 1px solid var(--border);
+  background: #fff;
 }
 .configuration-panel .analysis-card > .section-head {
   margin: 0;
@@ -2332,7 +2388,15 @@ label small,
     display: block;
   }
   .project-search {
+    width: 100%;
+  }
+  .list-toolbar {
+    width: 100%;
     margin-top: 18px;
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .time-sort {
     width: 100%;
   }
   .project-search input {
@@ -2341,6 +2405,10 @@ label small,
   }
   .project-header {
     padding: 17px 14px 17px 60px;
+  }
+  .back-to-top {
+    right: 18px;
+    bottom: 18px;
   }
   .project-header-actions {
     gap: 5px;
